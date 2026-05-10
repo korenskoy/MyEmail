@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — MyEmail</title>
+  <meta name="description" content="MyEmail Privacy Policy. All your data stays on your device. No servers, no telemetry, no third-party sharing.">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --bg-alt: #f5f5f7;
+      --text: #1d1d1f;
+      --text-secondary: #6e6e73;
+      --accent: #0071e3;
+      --border: #d2d2d7;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #000000;
+        --bg-alt: #111111;
+        --text: #f5f5f7;
+        --text-secondary: #a1a1a6;
+        --accent: #2997ff;
+        --border: #2d2d2d;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      background: rgba(255,255,255,.72);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      nav { background: rgba(0,0,0,.72); }
+    }
+
+    .nav-inner {
+      max-width: 720px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 48px;
+    }
+
+    .nav-logo {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .nav-back { font-size: 14px; color: var(--text-secondary); }
+    .nav-back:hover { color: var(--text); text-decoration: none; }
+
+    .content {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 64px 24px 96px;
+    }
+
+    .meta {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 48px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .meta strong { color: var(--text); }
+
+    h1 {
+      font-size: clamp(28px, 5vw, 40px);
+      font-weight: 700;
+      letter-spacing: -.02em;
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-top: 48px;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+
+    p {
+      font-size: 16px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      line-height: 1.7;
+    }
+
+    p strong { color: var(--text); }
+
+    ul {
+      margin: 0 0 16px 20px;
+      color: var(--text-secondary);
+    }
+
+    li { font-size: 16px; line-height: 1.7; margin-bottom: 4px; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 15px;
+      margin-bottom: 24px;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+
+    tbody tr:last-child td { border-bottom: none; }
+
+    td:first-child {
+      font-weight: 500;
+      color: var(--text);
+      vertical-align: top;
+      white-space: nowrap;
+      padding-right: 24px;
+    }
+
+    td:last-child { color: var(--text-secondary); font-size: 14px; }
+
+    .callout {
+      background: var(--bg-alt);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 8px 8px 0;
+      padding: 16px 20px;
+      margin-bottom: 32px;
+    }
+
+    .callout p { margin: 0; font-size: 15px; }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 24px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    footer a { color: var(--text-secondary); }
+    footer a:hover { color: var(--text); text-decoration: none; }
+    footer .links { display: flex; justify-content: center; gap: 20px; margin-bottom: 10px; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="/">MyEmail</a>
+    <a class="nav-back" href="index.html">&#8592; Back to homepage</a>
+  </div>
+</nav>
+
+<div class="content">
+  <h1>Privacy Policy</h1>
+  <div class="meta">
+    <strong>Version 1.0</strong> &nbsp;&middot;&nbsp; Effective date: May 10, 2026
+  </div>
+
+  <div class="callout">
+    <p><strong>The short version:</strong> all your data stays on your device.
+    We collect nothing and operate no servers.</p>
+  </div>
+
+  <h2>1. Overview</h2>
+  <p>
+    MyEmail is a local macOS email client developed by Anton Korenskoy ("Developer", "we", "us").
+    This Privacy Policy explains what data the application handles, where it is stored,
+    and how it is protected.
+  </p>
+
+  <h2>2. Data We Do Not Collect</h2>
+  <p>The Developer does not collect, transmit, or have access to:</p>
+  <ul>
+    <li>Your email content (messages, attachments, metadata)</li>
+    <li>Your email account credentials or OAuth2 tokens</li>
+    <li>Usage analytics, crash reports, or telemetry of any kind</li>
+    <li>Device identifiers or personal information</li>
+  </ul>
+
+  <h2>3. Data Stored Locally on Your Device</h2>
+  <p>The App stores the following data exclusively on your Mac:</p>
+
+  <table>
+    <thead>
+      <tr><th>Data</th><th>Location</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Email messages and metadata</td>
+        <td>~/Library/Application Support/MyEmail/ (SQLite via GRDB)</td>
+      </tr>
+      <tr>
+        <td>Attachments</td>
+        <td>~/Library/Application Support/MyEmail/attachments/</td>
+      </tr>
+      <tr>
+        <td>OAuth2 tokens and credentials</td>
+        <td>macOS Keychain (kSecAttrAccessibleAfterFirstUnlock)</td>
+      </tr>
+      <tr>
+        <td>App preferences and settings</td>
+        <td>~/Library/Preferences/</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    This data never leaves your device except via normal IMAP/SMTP communication
+    directly between the App and your mail server.
+  </p>
+
+  <h2>4. Communication with Mail Servers</h2>
+  <p>
+    The App communicates directly with the mail servers you configure (e.g., Gmail via IMAP/SMTP).
+    This communication is:
+  </p>
+  <ul>
+    <li>Encrypted using TLS</li>
+    <li>Governed by your mail provider's own privacy policy
+      (e.g., <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google Privacy Policy</a>)</li>
+  </ul>
+  <p>The Developer is not a party to this communication and cannot access it.</p>
+
+  <h2>5. OAuth2 Authentication (Gmail and Compatible Providers)</h2>
+  <p>
+    When you authenticate via OAuth2, the App uses the PKCE flow (RFC 8252) with a loopback redirect URI.
+    The authorization exchange happens entirely between your browser and the OAuth provider.
+    The Developer does not receive or store OAuth tokens outside of your local Keychain.
+  </p>
+  <p>
+    The App requests access to your Gmail account solely to send and receive email on your behalf
+    via IMAP and SMTP. The following OAuth scopes are used:
+  </p>
+  <table>
+    <thead>
+      <tr><th>Scope</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>https://mail.google.com/</td>
+        <td>Read, send, and manage email via IMAP and SMTP. Required for full mailbox
+        synchronization, sending messages, and managing folders.</td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    No Google user data is transferred to the Developer's servers — there are none.
+    All email data is stored locally on your Mac as described in Section 3.
+  </p>
+
+  <h2>6. Remote Content in Emails</h2>
+  <p>
+    HTML emails may reference remote images and resources. The App does not load remote content
+    by default; a banner is shown asking for your permission before any external request is made.
+    JavaScript is disabled entirely in the email renderer.
+  </p>
+
+  <h2>7. Third-Party Services</h2>
+  <p>
+    The App does not integrate any third-party analytics, advertising, or tracking SDKs.
+  </p>
+
+  <h2>8. Data Security</h2>
+  <ul>
+    <li>Credentials are stored in the macOS Keychain with
+      <code>kSecAttrAccessibleAfterFirstUnlock</code> accessibility.</li>
+    <li>The local SQLite database is not additionally encrypted at rest beyond macOS full-disk
+      encryption (FileVault). Enabling FileVault is recommended for sensitive data.</li>
+    <li>The Developer assumes no liability for data loss due to hardware failure, OS issues,
+      or unauthorized physical access to your device.</li>
+  </ul>
+
+  <h2>9. Children's Privacy</h2>
+  <p>
+    The App is not directed to children under 13 and does not knowingly collect any
+    information from minors.
+  </p>
+
+  <h2>10. Changes to This Policy</h2>
+  <p>
+    The Developer may update this Privacy Policy at any time. The updated policy will be
+    distributed with the App. Continued use after an update constitutes acceptance of the
+    revised policy.
+  </p>
+
+  <h2>11. Contact</h2>
+  <p>
+    For privacy-related questions or requests: <a href="mailto:korenskoy@gmail.com">korenskoy@gmail.com</a>
+  </p>
+</div>
+
+<footer>
+  <div class="links">
+    <a href="index.html">Home</a>
+    <a href="terms.html">Terms of Service</a>
+    <a href="https://github.com/korenskoy/MyEmail">GitHub</a>
+    <a href="mailto:korenskoy@gmail.com">Contact</a>
+  </div>
+  <div>&copy; 2026 Anton Korenskoy. MIT License.</div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyEmail — macOS Email Client for Power Users</title>
+  <meta name="description" content="A native macOS email client built for correctness under load. Multi-account, large archives, offline-capable. No AI, no telemetry, no cloud.">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --bg-alt: #f5f5f7;
+      --text: #1d1d1f;
+      --text-secondary: #6e6e73;
+      --accent: #0071e3;
+      --accent-hover: #0077ed;
+      --border: #d2d2d7;
+      --card-bg: #ffffff;
+      --shadow: 0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.05);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #000000;
+        --bg-alt: #111111;
+        --text: #f5f5f7;
+        --text-secondary: #a1a1a6;
+        --accent: #2997ff;
+        --accent-hover: #47a8ff;
+        --border: #2d2d2d;
+        --card-bg: #1c1c1e;
+        --shadow: 0 1px 3px rgba(0,0,0,.4), 0 4px 16px rgba(0,0,0,.3);
+      }
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-hover); text-decoration: underline; }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      background: rgba(255,255,255,.72);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      nav { background: rgba(0,0,0,.72); }
+    }
+
+    .nav-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 48px;
+    }
+
+    .nav-logo {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .nav-links { display: flex; gap: 24px; }
+    .nav-links a { font-size: 14px; color: var(--text-secondary); }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    /* ── HERO ── */
+    .hero {
+      text-align: center;
+      padding: 96px 24px 80px;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    .hero-label {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-size: clamp(36px, 6vw, 56px);
+      font-weight: 700;
+      letter-spacing: -.02em;
+      line-height: 1.1;
+      margin-bottom: 20px;
+      color: var(--text);
+    }
+
+    .hero-sub {
+      font-size: 19px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      max-width: 560px;
+      margin: 0 auto 40px;
+    }
+
+    .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 11px 22px;
+      border-radius: 980px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    .btn:hover { opacity: .85; text-decoration: none; }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: var(--bg-alt);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .platform-note {
+      margin-top: 16px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    /* ── SECTION ── */
+    section { padding: 80px 24px; }
+
+    .section-inner {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    .section-label {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+
+    h2 {
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 700;
+      letter-spacing: -.02em;
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+
+    .section-desc {
+      font-size: 17px;
+      color: var(--text-secondary);
+      max-width: 560px;
+      line-height: 1.6;
+      margin-bottom: 52px;
+    }
+
+    /* ── FEATURES GRID ── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .feature-icon {
+      font-size: 28px;
+      margin-bottom: 14px;
+      display: block;
+      line-height: 1;
+    }
+
+    .feature-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text);
+    }
+
+    .feature-desc {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.55;
+    }
+
+    /* ── ALT BG ── */
+    .alt-bg { background: var(--bg-alt); }
+
+    /* ── PRINCIPLES ── */
+    .principles-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 24px;
+      list-style: none;
+    }
+
+    .principle {
+      display: flex;
+      gap: 14px;
+    }
+
+    .principle-bullet {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      margin-top: 8px;
+      flex-shrink: 0;
+    }
+
+    .principle-text strong {
+      display: block;
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .principle-text span {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* ── TECH TABLE ── */
+    .tech-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .tech-table th,
+    .tech-table td {
+      text-align: left;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tech-table th {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+
+    .tech-table tbody tr:last-child td { border-bottom: none; }
+
+    .tech-table td:first-child {
+      font-weight: 500;
+      width: 200px;
+      color: var(--text);
+    }
+
+    .tech-table td:last-child {
+      color: var(--text-secondary);
+      font-family: "SF Mono", "Menlo", "Monaco", monospace;
+      font-size: 13px;
+    }
+
+    /* ── PRIVACY CTA ── */
+    .privacy-cta {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 48px 40px;
+      box-shadow: var(--shadow);
+      display: flex;
+      gap: 32px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .privacy-cta-text { flex: 1; min-width: 260px; }
+    .privacy-cta-text h3 { font-size: 24px; font-weight: 700; margin-bottom: 10px; }
+    .privacy-cta-text p { font-size: 15px; color: var(--text-secondary); line-height: 1.6; }
+    .privacy-cta-action { flex-shrink: 0; padding-top: 4px; }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 24px;
+      text-align: center;
+    }
+
+    .footer-inner {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .footer-links a { font-size: 13px; color: var(--text-secondary); }
+    .footer-links a:hover { color: var(--text); text-decoration: none; }
+
+    .footer-copy { font-size: 12px; color: var(--text-secondary); }
+
+    @media (max-width: 600px) {
+      .hero { padding: 64px 20px 56px; }
+      section { padding: 56px 20px; }
+      .privacy-cta { padding: 32px 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="/">MyEmail</a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#privacy">Privacy</a>
+      <a href="https://github.com/korenskoy/MyEmail">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<main>
+
+  <!-- HERO -->
+  <div class="hero">
+    <span class="hero-label">macOS Email Client</span>
+    <h1>Email that gets out of your way</h1>
+    <p class="hero-sub">
+      A native macOS client built for power users with multiple accounts, large archives,
+      and a need for correctness under load. Inspired by MailMate and Thunderbird.
+      No AI, no telemetry, no cloud.
+    </p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="https://github.com/korenskoy/MyEmail/releases">
+        Download
+      </a>
+      <a class="btn btn-secondary" href="https://github.com/korenskoy/MyEmail">
+        View source
+      </a>
+    </div>
+    <p class="platform-note">macOS 15 Sequoia or later &nbsp;&middot;&nbsp; Free &amp; open source</p>
+  </div>
+
+  <!-- FEATURES -->
+  <section id="features">
+    <div class="section-inner">
+      <p class="section-label">Features</p>
+      <h2>Built for real workflows</h2>
+      <p class="section-desc">
+        Multi-account support, full-text search across 50k+ messages,
+        real-time IDLE push, and a customizable layout — all without
+        phoning home.
+      </p>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <span class="feature-icon">&#9993;</span>
+          <div class="feature-title">Multi-Account</div>
+          <p class="feature-desc">
+            Gmail via OAuth2 + PKCE and generic IMAP/SMTP with password.
+            Unified Inbox aggregates all account inboxes in one view.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <span class="feature-icon">&#128269;</span>
+          <div class="feature-title">Full-Text Search</div>
+          <p class="feature-desc">
+            FTS5-powered instant search across all accounts and folders.
+            Supports <code>from:</code>, <code>to:</code>, <code>subject:</code>,
+            <code>is:unread</code>, <code>has:attachment</code>.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <span class="feature-icon">&#128246;</span>
+          <div class="feature-title">IDLE Push</div>
+          <p class="feature-desc">
+            Real-time delivery on INBOX via IMAP IDLE (RFC 2177).
+            STATUS polling on other folders. No polling delay on the mailboxes that matter.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <span class="feature-icon">&#128268;</span>
+          <div class="feature-title">Offline-Capable</div>
+          <p class="feature-desc">
+            Full read, compose, and search while offline.
+            Actions are queued locally and replayed automatically on reconnect.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <span class="feature-icon">&#9881;</span>
+          <div class="feature-title">Customizable Layout</div>
+          <p class="feature-desc">
+            Wide and Classic layouts. NSToolbar bridge with right-click customization.
+            Per-column width and visibility in the message list.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <span class="feature-icon">&#128274;</span>
+          <div class="feature-title">Secure HTML Rendering</div>
+          <p class="feature-desc">
+            WKWebView with JavaScript fully disabled and strict CSP.
+            Remote images blocked by default. No tracking pixels.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRINCIPLES -->
+  <section class="alt-bg">
+    <div class="section-inner">
+      <p class="section-label">Design principles</p>
+      <h2>Correct, not clever</h2>
+      <p class="section-desc">
+        Every architectural decision is driven by reliability at scale, not feature count.
+      </p>
+
+      <ul class="principles-list">
+        <li class="principle">
+          <div class="principle-bullet"></div>
+          <div class="principle-text">
+            <strong>No UI flicker, no layout jumps</strong>
+            <span>Fixed row heights, reserved scrollbar slot, saved scroll position per folder.</span>
+          </div>
+        </li>
+        <li class="principle">
+          <div class="principle-bullet"></div>
+          <div class="principle-text">
+            <strong>Optimistic UI with UNDO</strong>
+            <span>Local state updates instantly. Every destructive action supports undo to a depth of 20 operations.</span>
+          </div>
+        </li>
+        <li class="principle">
+          <div class="principle-bullet"></div>
+          <div class="principle-text">
+            <strong>Bulk operations via UIDSet batching</strong>
+            <span>Archive or delete thousands of messages in a single IMAP round-trip, not a for-loop.</span>
+          </div>
+        </li>
+        <li class="principle">
+          <div class="principle-bullet"></div>
+          <div class="principle-text">
+            <strong>Concurrent refresh safety</strong>
+            <span>Per-account OAuth semaphore prevents Google token rotation from being broken by parallel refresh calls.</span>
+          </div>
+        </li>
+        <li class="principle">
+          <div class="principle-bullet"></div>
+          <div class="principle-text">
+            <strong>Swift 6 strict concurrency</strong>
+            <span>Actor-isolated services, Sendable records, zero data races by construction.</span>
+          </div>
+        </li>
+        <li class="principle">
+          <div class="principle-bullet"></div>
+          <div class="principle-text">
+            <strong>Search &lt; 200 ms on 50k messages</strong>
+            <span>SQLite FTS5 with synchronised virtual table. All indexed locally, nothing sent to a server.</span>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- TECH STACK -->
+  <section>
+    <div class="section-inner">
+      <p class="section-label">Technology</p>
+      <h2>Built on proven foundations</h2>
+      <p class="section-desc">Stable, auditable open-source libraries. No proprietary cloud dependencies.</p>
+
+      <table class="tech-table">
+        <thead>
+          <tr>
+            <th>Layer</th>
+            <th>Technology</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>UI</td><td>SwiftUI + @Observable, NSToolbar bridge</td></tr>
+          <tr><td>Persistence</td><td>GRDB.swift (SQLite, WAL, ValueObservation)</td></tr>
+          <tr><td>Full-text search</td><td>FTS5 via GRDB, system SQLite (macOS 15+)</td></tr>
+          <tr><td>IMAP / SMTP</td><td>SwiftMail (Cocoanetics) + NWConnection</td></tr>
+          <tr><td>MIME parsing</td><td>SwiftEmailParser</td></tr>
+          <tr><td>HTML rendering</td><td>WKWebView, JS disabled, strict CSP</td></tr>
+          <tr><td>OAuth2</td><td>ASWebAuthenticationSession + PKCE (RFC 8252)</td></tr>
+          <tr><td>Credentials</td><td>macOS Keychain, kSecAttrAccessibleAfterFirstUnlock</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- PRIVACY CTA -->
+  <section class="alt-bg" id="privacy">
+    <div class="section-inner">
+      <div class="privacy-cta">
+        <div class="privacy-cta-text">
+          <h3>Your data stays on your Mac</h3>
+          <p>
+            MyEmail has no servers, no analytics, and no telemetry.
+            Your email, credentials, and OAuth tokens never leave your device.
+            All communication happens directly between the app and your mail provider over TLS.
+          </p>
+        </div>
+        <div class="privacy-cta-action">
+          <a class="btn btn-secondary" href="privacy.html">Read Privacy Policy</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-links">
+      <a href="https://github.com/korenskoy/MyEmail">GitHub</a>
+      <a href="https://github.com/korenskoy/MyEmail/releases">Releases</a>
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="terms.html">Terms of Service</a>
+      <a href="mailto:korenskoy@gmail.com">Contact</a>
+    </div>
+    <p class="footer-copy">&copy; 2026 Anton Korenskoy. MIT License.</p>
+  </div>
+</footer>
+
+</body>
+</html>
