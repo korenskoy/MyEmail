@@ -1,0 +1,302 @@
+//
+//  IMAPService.swift
+//  MyEmail
+//
+//  Actor wrapping SwiftMail.IMAPServer. One instance per account.
+//  Serializes all IMAP operations through the actor mailbox — no
+//  ad-hoc parallel connections (§3.6: 2 per account budget).
+//
+//  All SwiftMail calls are `await` — IMAPServer is itself an actor (§8.5).
+//
+
+import Foundation
+import GRDB
+import SwiftMail
+
+actor IMAPService {
+    private let account: Account
+    private let keychain: KeychainService
+    private var server: IMAPServer?
+
+    /// Dynamic token provider — AuthService.currentAccessToken refreshes if near expiry
+    private var accessTokenProvider: (@Sendable () async throws -> String)?
+
+    // MARK: - SELECT state
+    private(set) var lastSelection: Mailbox.Selection?
+    private(set) var selectedFolderPath: String?
+
+    init(account: Account, keychain: KeychainService) {
+        self.account = account
+        self.keychain = keychain
+    }
+
+    // MARK: - Connection
+
+    var isConnected: Bool { server != nil }
+
+    /// Set a dynamic token provider that refreshes automatically (§9.9).
+    /// Called from SyncService after constructing IMAPService.
+    func setAccessTokenProvider(_ provider: @escaping @Sendable () async throws -> String) {
+        self.accessTokenProvider = provider
+    }
+
+    func connect() async throws {
+        // Clear stale SELECT state from prior connection
+        self.lastSelection = nil
+        self.selectedFolderPath = nil
+
+        let useTLS = account.imapSecurity != .none
+        let srv = IMAPServer(
+            host: account.imapHost,
+            port: account.imapPort,
+            useTLS: useTLS
+        )
+
+        try await srv.connect()
+
+        switch account.authType {
+        case .oauth2:
+            let email = account.email
+
+            // Initial auth with current token on primary connection.
+            let token: String
+            if let provider = accessTokenProvider {
+                token = try await provider()
+            } else {
+                token = try keychain.oauthAccessToken(for: account.id)
+            }
+            try await srv.authenticateXOAUTH2(email: email, accessToken: token)
+
+            // MUST be set AFTER authenticateXOAUTH2: that call overwrites
+            // SwiftMail's stored `authentication` with a static closure
+            // capturing this token string, which is then reused by every
+            // per-folder IDLE connection and auto-reconnect inside the
+            // IDLE cycle task. Re-installing the dynamic provider makes
+            // each fresh reauth fetch a live token (AuthService refreshes
+            // if near expiry), matching Thunderbird's proactive-refresh
+            // model (§9.9, rule #15).
+            if let provider = accessTokenProvider {
+                await srv.setXOAUTH2AccessTokenProvider(
+                    email: email,
+                    accessTokenProvider: provider
+                )
+            }
+
+        case .plain:
+            try await srv.login(
+                username: account.email,
+                password: try keychain.password(for: account.id)
+            )
+        }
+
+        // RFC 2971: Send IMAP ID after auth (best-practice, helps server-side debugging)
+        do {
+            let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+            let clientID = Identification(name: "MyEmail", version: version, os: "macOS")
+            _ = try await srv.id(clientID)
+        } catch {
+            // Non-fatal — server may not support ID extension
+            LogService.log(.debug, .imap, "IMAP ID not supported", detail: "\(error)")
+        }
+
+        self.server = srv
+        LogService.log(.info, .imap, "Connected \(account.email)")
+    }
+
+    func disconnect() async {
+        guard let srv = server else { return }
+        try? await srv.logout()
+        try? await srv.disconnect()
+        self.server = nil
+        self.lastSelection = nil
+        self.selectedFolderPath = nil
+        LogService.log(.info, .imap, "Disconnected \(account.email)")
+    }
+
+    // MARK: - SELECT
+
+    @discardableResult
+    func selectFolder(_ path: String) async throws -> Mailbox.Selection {
+        let srv = try requireServer()
+        let sel = try await srv.selectMailbox(path)
+        self.lastSelection = sel
+        self.selectedFolderPath = path
+        return sel
+    }
+
+    /// Resume SELECT with QRESYNC parameters (RFC 7162 §3.2.5). The returned
+    /// `Mailbox.Selection` carries `highestModSequence` (new server watermark)
+    /// and `vanishedUIDs` (UIDs expunged since the client's `modSeq`), so the
+    /// ghost set arrives inline instead of needing a separate SEARCH.
+    @discardableResult
+    func selectFolderWithQResync(
+        _ path: String,
+        uidValidity: UInt32,
+        modSeq: UInt64,
+        knownUids: Set<UInt32>? = nil
+    ) async throws -> Mailbox.Selection {
+        let srv = try requireServer()
+        let sel = try await srv.selectMailboxWithQResync(
+            path, uidValidity: uidValidity, modSeq: modSeq, knownUIDs: knownUids
+        )
+        self.lastSelection = sel
+        self.selectedFolderPath = path
+        return sel
+    }
+
+    /// Skip re-SELECT if folder already active on this connection.
+    /// Use for read-only operations (search, body fetch, pagination).
+    @discardableResult
+    func ensureFolderSelected(_ path: String) async throws -> Mailbox.Selection {
+        if selectedFolderPath == path, let sel = lastSelection {
+            return sel
+        }
+        return try await selectFolder(path)
+    }
+
+    // MARK: - Fetch headers
+
+    /// Fetch recent N messages using sequence numbers (RFC 4549 §4.1).
+    /// Sequence numbers are always dense (1...EXISTS), no sparse UID gaps.
+    func fetchRecentHeaders(
+        in folderPath: String,
+        count: Int = 200
+    ) async throws -> [MessageInfo] {
+        let sel = try await selectFolder(folderPath)
+        let total = UInt32(sel.messageCount)
+        guard total > 0 else { return [] }
+        let from = total > UInt32(count) ? total - UInt32(count) + 1 : 1
+        return try await requireServer()
+            .fetchMessageInfos(sequenceRange: SequenceNumber(from)...SequenceNumber(total))
+    }
+
+    /// Fetch headers for every message in the selected folder via
+    /// `FETCH 1:<EXISTS>` (Thunderbird-style eager enumeration — mirrors
+    /// `GetMsgHdrsToDownload` in `nsImapProtocol.cpp`). FETCH responses are
+    /// per-message (~1 KB each), so the 8 KB line-length limit that breaks
+    /// open-ended UID SEARCH doesn't apply here.
+    ///
+    /// NOTE: For large mailboxes (≥500 messages) the caller should prefer
+    /// `fetchHeaders(sequenceRange:)` in batches of ~500 to avoid hitting
+    /// the IMAP command timeout on the single FETCH (see Thunderbird's
+    /// `FolderMsgDumpLoop` in `nsImapProtocol.cpp:4539`).
+    func fetchAllHeaders(in folderPath: String) async throws -> [MessageInfo] {
+        let sel = try await selectFolder(folderPath)
+        let total = UInt32(sel.messageCount)
+        guard total > 0 else { return [] }
+        return try await requireServer()
+            .fetchMessageInfos(sequenceRange: SequenceNumber(1)...SequenceNumber(total))
+    }
+
+    /// Fetch headers for a sequence-number range. Thin wrapper so callers
+    /// can chunk a full-folder enumeration into ~500-sequence batches.
+    /// SwiftMail `fetchMessageInfosBulk` sends a single `FETCH lo:hi (...)`
+    /// (no internal chunking for sequence ranges), so the whole range
+    /// streams back in one server round-trip.
+    func fetchHeaders(sequenceRange: ClosedRange<SequenceNumber>) async throws -> [MessageInfo] {
+        try await requireServer().fetchMessageInfos(sequenceRange: sequenceRange)
+    }
+
+    /// Fetch headers for a specific UID range (for incremental sync).
+    func fetchHeaders(
+        uidRange: ClosedRange<UID>
+    ) async throws -> [MessageInfo] {
+        try await requireServer()
+            .fetchMessageInfos(uidRange: uidRange)
+    }
+
+    /// Fetch headers for UIDs >= startUID (open-ended).
+    func fetchHeaders(
+        from startUID: UID
+    ) async throws -> [MessageInfo] {
+        try await requireServer()
+            .fetchMessageInfos(uidRange: startUID...)
+    }
+
+    /// Fetch raw RFC822 source for a single UID (View Source).
+    func fetchRawMessage(uid: UInt32) async throws -> Data {
+        try await requireServer().fetchRawMessage(identifier: UID(uid))
+    }
+
+    /// Pipelined fetch of MIME parts for multiple UIDs (preview snippets).
+    func fetchPartsPipelined(
+        parts: [(uid: UID, section: Section)]
+    ) async throws -> [UID: [(section: Section, data: Data)]] {
+        try await requireServer().fetchPartsPipelined(parts: parts)
+    }
+
+    /// Fetch headers for a specific set of UIDs (non-contiguous).
+    func fetchHeadersBySet(_ uids: [UInt32]) async throws -> [MessageInfo] {
+        guard !uids.isEmpty else { return [] }
+        var set = UIDSet()
+        for uid in uids { set.insert(UID(uid)) }
+        return try await requireServer().fetchMessageInfosBulk(using: set)
+    }
+
+    /// Fetch flags for a single UID via FETCH (FLAGS). Used by rawHeaderFallback.
+    func fetchSingleMessageInfo(uid: UInt32) async throws -> MessageInfo? {
+        try await requireServer().fetchMessageInfo(for: UID(uid))
+    }
+
+    // MARK: - List all UIDs (for reconcile)
+
+    /// `SEARCH ALL` — returns set of all UIDs in currently selected folder.
+    func listAllUIDs() async throws -> Set<UInt32> {
+        try await uidSearchAsSet(criteria: [.all])
+    }
+
+    // MARK: - List folders
+
+    func listFolders() async throws -> [Mailbox.Info] {
+        try await requireServer().listSpecialUseMailboxes()
+    }
+
+    func listAllFolders() async throws -> [Mailbox.Info] {
+        try await requireServer().listMailboxes()
+    }
+
+    // MARK: - Raw client factory (for commands SwiftMail doesn't expose)
+
+    /// Create an authenticated raw IMAP client for DELETE, RENAME, EXAMINE.
+    /// Opens a separate short-lived connection.
+    func createAuthenticatedRawClient() async throws -> IMAPRawClient {
+        let raw = IMAPRawClient(
+            host: account.imapHost,
+            port: UInt16(account.imapPort),
+            security: account.imapSecurity
+        )
+        try await raw.connect()
+
+        switch account.authType {
+        case .oauth2:
+            if let provider = accessTokenProvider {
+                let token = try await provider()
+                try await raw.authenticateXOAUTH2(email: account.email, accessToken: token)
+            } else {
+                let token = try keychain.oauthAccessToken(for: account.id)
+                try await raw.authenticateXOAUTH2(email: account.email, accessToken: token)
+            }
+        case .plain:
+            let password = try keychain.password(for: account.id)
+            try await raw.login(user: account.email, password: password)
+        }
+        return raw
+    }
+
+    // MARK: - Private
+
+    func requireServer() throws -> IMAPServer {
+        guard let server else {
+            throw IMAPServiceError.notConnected
+        }
+        return server
+    }
+}
+
+// MARK: - Errors
+
+enum IMAPServiceError: Error, Sendable {
+    case notConnected
+    case authenticationFailed
+    case folderNotFound(String)
+}

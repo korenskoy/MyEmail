@@ -1,0 +1,22 @@
+build/
+MyEmail/App/Secrets.swift
+.env
+.env.*
+!.env.template
+.DS_Store
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+DerivedData/
+
+# SPM
+.swiftpm/
+Package.resolved
+
+# Local working notes
+*do_not_commit*
+.omc/
+.github/hooks/
+docs/

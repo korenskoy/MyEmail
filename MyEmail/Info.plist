@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLName</key>
+			<string>com.googleusercontent.apps.855667893920-d5kf9r5uilc7jhn3vdv3cebjm9dagrsn</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.855667893920-d5kf9r5uilc7jhn3vdv3cebjm9dagrsn</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSContactsUsageDescription</key>
+	<string>MyEmail uses your contacts for recipient autocomplete when composing messages.</string>
+</dict>
+</plist>

@@ -1,0 +1,3650 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "": {},
+    " ": {},
+    "%@ — authentication expired": {},
+    "%@:%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "new",
+            "value": "%1$@:%2$lld"
+          }
+        }
+      }
+    },
+    "%lld": {},
+    "%lld failed actions": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld неудачных действий"
+          }
+        }
+      }
+    },
+    "(%lld messages)": {
+      "comment": "Window subtitle showing message count",
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(%lld messages)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(%lld сообщений)"
+          }
+        }
+      }
+    },
+    "(No subject)": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(Без темы)"
+          }
+        }
+      }
+    },
+    "1 line": {},
+    "1 minute": {},
+    "120 seconds": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "120 секунд"
+          }
+        }
+      }
+    },
+    "15 minutes": {},
+    "15 seconds": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "15 секунд"
+          }
+        }
+      }
+    },
+    "2 lines": {},
+    "30 minutes": {},
+    "30 seconds": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "30 секунд"
+          }
+        }
+      }
+    },
+    "5 minutes": {},
+    "587": {},
+    "60 seconds": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "60 секунд"
+          }
+        }
+      }
+    },
+    "993": {},
+    "About MyEmail": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "О программе MyEmail"
+          }
+        }
+      }
+    },
+    "Account": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Учётная запись"
+          }
+        }
+      }
+    },
+    "Account name": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Название аккаунта"
+          }
+        }
+      }
+    },
+    "Account type": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account type"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тип учётной записи"
+          }
+        }
+      }
+    },
+    "Accounts": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accounts"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Учётные записи"
+          }
+        }
+      }
+    },
+    "Accounts error": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accounts error"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ошибка учётных записей"
+          }
+        }
+      }
+    },
+    "Action": {},
+    "Actions": {},
+    "Add": {},
+    "Add Action": {},
+    "Add Condition": {},
+    "Add account": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add account"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавить учётную запись"
+          }
+        }
+      }
+    },
+    "Add an account in Settings (⌘,)": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавьте аккаунт в Настройках (⌘,)"
+          }
+        }
+      }
+    },
+    "Add email": {},
+    "Add to trusted senders": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добавить в доверенные"
+          }
+        }
+      }
+    },
+    "Advanced": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Расширенные"
+          }
+        }
+      }
+    },
+    "All": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все"
+          }
+        }
+      }
+    },
+    "All Inbox folders": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все папки Входящие"
+          }
+        }
+      }
+    },
+    "All Mail": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вся почта"
+          }
+        }
+      }
+    },
+    "All accounts": {
+      "extractionState": "stale",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все аккаунты"
+          }
+        }
+      }
+    },
+    "All conditions (AND)": {},
+    "All messages in \"%@\" will be permanently deleted. This cannot be undone.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все сообщения в «%@» будут удалены безвозвратно. Это действие нельзя отменить."
+          }
+        }
+      }
+    },
+    "Allow manual runs": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разрешить ручной запуск"
+          }
+        }
+      }
+    },
+    "Always load from %@": {},
+    "Any condition (OR)": {},
+    "Appearance": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оформление"
+          }
+        }
+      }
+    },
+    "Apply to Inbox": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Применить к Входящим"
+          }
+        }
+      }
+    },
+    "Apply to folders": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Применять к папкам"
+          }
+        }
+      }
+    },
+    "Apply to incoming mail": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Применять к входящим"
+          }
+        }
+      }
+    },
+    "Archive": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Архив"
+          }
+        }
+      }
+    },
+    "Archive folder": {
+      "extractionState": "stale",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Папка архива"
+          }
+        }
+      }
+    },
+    "Attach files": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прикрепить файлы"
+          }
+        }
+      }
+    },
+    "Attachment-only message": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Письмо с вложениями"
+          }
+        }
+      }
+    },
+    "Auth": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auth"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Авторизация"
+          }
+        }
+      }
+    },
+    "Auto-detect": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Автоопределение"
+          }
+        }
+      }
+    },
+    "Auto-scroll to bottom": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-scroll to bottom"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Автопрокрутка вниз"
+          }
+        }
+      }
+    },
+    "Back": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Назад"
+          }
+        }
+      }
+    },
+    "Background download": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Фоновая загрузка"
+          }
+        }
+      }
+    },
+    "Bcc:": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скрытая копия:"
+          }
+        }
+      }
+    },
+    "Before and After: date range.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "before:, after: date range (YYYY-MM-DD or relative like 7d, 2w, 3m, 1y)."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "before:, after: диапазон дат (YYYY-MM-DD или относительно: 7d, 2w, 3m, 1y)."
+          }
+        }
+      }
+    },
+    "Block remote images by default": {},
+    "Body": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тело"
+          }
+        }
+      }
+    },
+    "Body: match words in message body only.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "body: match words in message body only."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "body: искать только в теле письма."
+          }
+        }
+      }
+    },
+    "Bold": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Полужирный"
+          }
+        }
+      }
+    },
+    "Bring All to Front": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все окна на передний план"
+          }
+        }
+      }
+    },
+    "Bulleted list": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Маркированный список"
+          }
+        }
+      }
+    },
+    "By month (Archive/2026/2026-04/)": {},
+    "By year (Archive/2026/)": {},
+    "Cache": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кеш"
+          }
+        }
+      }
+    },
+    "Cancel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отмена"
+          }
+        }
+      }
+    },
+    "Category": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Category"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Категория"
+          }
+        }
+      }
+    },
+    "Cc:": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Копия:"
+          }
+        }
+      }
+    },
+    "Check for new mail every": {},
+    "Choose an account type": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose an account type"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите тип учётной записи"
+          }
+        }
+      }
+    },
+    "Choose files to attach": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите файлы для прикрепления"
+          }
+        }
+      }
+    },
+    "Classic": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Классический"
+          }
+        }
+      }
+    },
+    "Clear attachment cache": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Очистить кеш вложений"
+          }
+        }
+      }
+    },
+    "Clear log": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear log"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Очистить лог"
+          }
+        }
+      }
+    },
+    "Clear recent searches": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Очистить историю поиска"
+          }
+        }
+      }
+    },
+    "Click to retry or discard failed actions": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нажмите, чтобы повторить или отбросить неудачные действия"
+          }
+        }
+      }
+    },
+    "Close": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Закрыть"
+          }
+        }
+      }
+    },
+    "Close Window": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Закрыть окно"
+          }
+        }
+      }
+    },
+    "Compact (22pt)": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Компактный (22pt)"
+          }
+        }
+      }
+    },
+    "Compose message": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Написать письмо"
+          }
+        }
+      }
+    },
+    "Conditions": {},
+    "Confirm before deleting messages": {},
+    "Connected": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключено"
+          }
+        }
+      }
+    },
+    "Copy": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Копировать"
+          }
+        }
+      }
+    },
+    "Copy address": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скопировать адрес"
+          }
+        }
+      }
+    },
+    "Copy log": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy log"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Копировать лог"
+          }
+        }
+      }
+    },
+    "Create": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Создать"
+          }
+        }
+      }
+    },
+    "Customize Toolbar…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настроить панель инструментов…"
+          }
+        }
+      }
+    },
+    "Cut": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вырезать"
+          }
+        }
+      }
+    },
+    "Database size": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Размер базы данных"
+          }
+        }
+      }
+    },
+    "Date": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Дата"
+          }
+        }
+      }
+    },
+    "Dates": {},
+    "Debug": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отладка"
+          }
+        }
+      }
+    },
+    "Debug Log": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Debug Log"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отладочный лог"
+          }
+        }
+      }
+    },
+    "Default signature": {},
+    "Delete": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить"
+          }
+        }
+      }
+    },
+    "Discard failed actions": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отбросить неудачные действия"
+          }
+        }
+      }
+    },
+    "Display Mail User Agent": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показывать почтовый клиент отправителя"
+          }
+        }
+      }
+    },
+    "Display name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display name"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отображаемое имя"
+          }
+        }
+      }
+    },
+    "Done": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Готово"
+          }
+        }
+      }
+    },
+    "Drafts": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Черновики"
+          }
+        }
+      }
+    },
+    "Edit": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Правка"
+          }
+        }
+      }
+    },
+    "Email": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Email"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Email"
+          }
+        }
+      }
+    },
+    "Empty": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Очистить"
+          }
+        }
+      }
+    },
+    "Empty Junk": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Очистить Спам"
+          }
+        }
+      }
+    },
+    "Empty Trash": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Очистить Корзину"
+          }
+        }
+      }
+    },
+    "Enabled": {},
+    "Encrypted message (PGP/GPG)": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Зашифрованное сообщение (PGP/GPG)"
+          }
+        }
+      }
+    },
+    "Enter folder name:": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите имя папки:"
+          }
+        }
+      }
+    },
+    "Enter new name:": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Введите новое имя:"
+          }
+        }
+      }
+    },
+    "Examples": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Примеры"
+          }
+        }
+      }
+    },
+    "Failed to load message": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось загрузить письмо"
+          }
+        }
+      }
+    },
+    "Failed to load message source": {},
+    "Field": {},
+    "File": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Файл"
+          }
+        }
+      }
+    },
+    "Find…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Найти…"
+          }
+        }
+      }
+    },
+    "Flag": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пометить"
+          }
+        }
+      }
+    },
+    "Flat": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flat"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Список"
+          }
+        }
+      }
+    },
+    "Flat (Archive/)": {},
+    "Flat View": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flat View"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Плоский список"
+          }
+        }
+      }
+    },
+    "Folder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Folder"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Папка"
+          }
+        }
+      }
+    },
+    "Folder structure": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Структура папок"
+          }
+        }
+      }
+    },
+    "Font": {
+      "extractionState": "stale",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Шрифт"
+          }
+        }
+      }
+    },
+    "Font family": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Шрифт"
+          }
+        }
+      }
+    },
+    "Font size": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Размер шрифта"
+          }
+        }
+      }
+    },
+    "Forward": {},
+    "Found": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Найдено"
+          }
+        }
+      }
+    },
+    "Found: %lld": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Найдено: %lld"
+          }
+        }
+      }
+    },
+    "Foundation milestone — open Debug Log Panel (⌥⌘Y)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Foundation milestone — open Debug Log Panel (⌥⌘Y)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "M1 Foundation — откройте панель отладки (⌥⌘Y)"
+          }
+        }
+      }
+    },
+    "Freetext search — any word in subject, from, to, body or list id.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Свободный поиск — любое слово в теме, отправителе, получателе, теле или идентификаторе списка."
+          }
+        }
+      }
+    },
+    "From": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "От"
+          }
+        }
+      }
+    },
+    "From:": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "От:"
+          }
+        }
+      }
+    },
+    "From: matches name or email. Multi-value.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "from: matches name or email. Multi-value."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "from: совпадение по имени или адресу. Можно указать несколько."
+          }
+        }
+      }
+    },
+    "General": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Общее"
+          }
+        }
+      }
+    },
+    "Get Mail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get Mail"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Получить почту"
+          }
+        }
+      }
+    },
+    "Get New Mail": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Получить почту"
+          }
+        }
+      }
+    },
+    "Global Search…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Глобальный поиск…"
+          }
+        }
+      }
+    },
+    "Gmail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gmail"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gmail"
+          }
+        }
+      }
+    },
+    "Gmail (OAuth)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gmail (OAuth)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gmail (OAuth)"
+          }
+        }
+      }
+    },
+    "Gmail uses label removal for archiving — messages stay in All Mail.": {},
+    "Gravatar": {},
+    "HTML": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HTML"
+          }
+        }
+      }
+    },
+    "Has: attachment filter.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "has: attachment filter — attachment or noattachment."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "has: фильтр по вложениям — attachment или noattachment."
+          }
+        }
+      }
+    },
+    "Help": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Справка"
+          }
+        }
+      }
+    },
+    "Hide Cc/Bcc": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скрыть Копия/Скрытая копия"
+          }
+        }
+      }
+    },
+    "Hide Debug Log Panel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide Debug Log Panel"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скрыть панель отладки"
+          }
+        }
+      }
+    },
+    "Hide MyEmail": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скрыть MyEmail"
+          }
+        }
+      }
+    },
+    "Hide Others": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скрыть остальные"
+          }
+        }
+      }
+    },
+    "Host, port, username and password": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Host, port, username and password"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хост, порт, логин и пароль"
+          }
+        }
+      }
+    },
+    "IMAP": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IMAP"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IMAP"
+          }
+        }
+      }
+    },
+    "IMAP (incoming)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IMAP (incoming)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IMAP (входящие)"
+          }
+        }
+      }
+    },
+    "IMAP connection timeout": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Таймаут IMAP-соединения"
+          }
+        }
+      }
+    },
+    "Icons": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Иконки"
+          }
+        }
+      }
+    },
+    "Identity": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Identity"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Личные данные"
+          }
+        }
+      }
+    },
+    "In: restrict to folder by name.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "in: restrict to folder by name."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "in: ограничить папкой по имени."
+          }
+        }
+      }
+    },
+    "Inbox": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Входящие"
+          }
+        }
+      }
+    },
+    "Insert": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вставить"
+          }
+        }
+      }
+    },
+    "Insert link": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вставить ссылку"
+          }
+        }
+      }
+    },
+    "Is: flag filter.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "is: filter flags — unread, read, flagged, unflagged."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "is: фильтр по флагам — unread, read, flagged, unflagged."
+          }
+        }
+      }
+    },
+    "Italic": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Курсив"
+          }
+        }
+      }
+    },
+    "Junk": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Спам"
+          }
+        }
+      }
+    },
+    "Larger and Smaller: size filter with K, M, G suffix.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "larger:, smaller: size filter (supports k, M, G suffix — 5M = 5 MiB)."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "larger:, smaller: фильтр размера (k, M, G — 5M = 5 МиБ)."
+          }
+        }
+      }
+    },
+    "Layout": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Расположение"
+          }
+        }
+      }
+    },
+    "Level": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Level"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Уровень"
+          }
+        }
+      }
+    },
+    "Level 1": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Уровень 1"
+          }
+        }
+      }
+    },
+    "Level 2": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Уровень 2"
+          }
+        }
+      }
+    },
+    "Level 3": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Уровень 3"
+          }
+        }
+      }
+    },
+    "Link label": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подпись ссылки"
+          }
+        }
+      }
+    },
+    "List: mailing-list identifier (List-ID).": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "list: mailing-list identifier (List-ID)."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "list: идентификатор рассылки (List-ID)."
+          }
+        }
+      }
+    },
+    "Load remote content": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Загрузить изображения"
+          }
+        }
+      }
+    },
+    "Mark All Read": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отметить все прочитанными"
+          }
+        }
+      }
+    },
+    "Mark Read/Unread": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Прочитано/Непрочитано"
+          }
+        }
+      }
+    },
+    "Mark as Junk": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пометить как спам"
+          }
+        }
+      }
+    },
+    "Mark as Read": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пометить как прочитанное"
+          }
+        }
+      }
+    },
+    "Mark as Spam": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пометить спамом"
+          }
+        }
+      }
+    },
+    "Mark as Unread": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пометить как непрочитанное"
+          }
+        }
+      }
+    },
+    "Mark as flagged": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отметить флагом"
+          }
+        }
+      }
+    },
+    "Mark as junk": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отметить спамом"
+          }
+        }
+      }
+    },
+    "Mark as read": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отметить прочитанным"
+          }
+        }
+      }
+    },
+    "Mark messages as read when selected": {},
+    "Match": {},
+    "Max messages to pre-download": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Максимум писем для предзагрузки"
+          }
+        }
+      }
+    },
+    "Max size per message": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Максимальный размер письма"
+          }
+        }
+      }
+    },
+    "Message": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сообщение"
+          }
+        }
+      }
+    },
+    "Message List": {},
+    "Message Source": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Message Source"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Исходный код письма"
+          }
+        }
+      }
+    },
+    "Message body unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Содержимое письма недоступно"
+          }
+        }
+      }
+    },
+    "Minimize": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Свернуть"
+          }
+        }
+      }
+    },
+    "Monospaced": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Моноширинный"
+          }
+        }
+      }
+    },
+    "Move to folder": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переместить в папку"
+          }
+        }
+      }
+    },
+    "MyEmail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MyEmail"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MyEmail"
+          }
+        }
+      }
+    },
+    "MyEmail Help": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Справка MyEmail"
+          }
+        }
+      }
+    },
+    "MyEmail does not support PGP/GPG decryption. Use a compatible application to read this message.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MyEmail не поддерживает расшифровку PGP/GPG. Используйте совместимое приложение для чтения этого сообщения."
+          }
+        }
+      }
+    },
+    "Name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Имя"
+          }
+        }
+      }
+    },
+    "Needs re-authentication": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Needs re-authentication"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Требуется повторная авторизация"
+          }
+        }
+      }
+    },
+    "New Message": {},
+    "New Rule": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новое правило"
+          }
+        }
+      }
+    },
+    "New Subfolder": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новая подпапка"
+          }
+        }
+      }
+    },
+    "New Subfolder…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новая подпапка…"
+          }
+        }
+      }
+    },
+    "No account available": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет доступных аккаунтов"
+          }
+        }
+      }
+    },
+    "No content": {
+      "extractionState": "stale",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет содержимого"
+          }
+        }
+      }
+    },
+    "No recent searches": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет недавних поисковых запросов"
+          }
+        }
+      }
+    },
+    "No results": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ничего не найдено"
+          }
+        }
+      }
+    },
+    "None": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "None"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет"
+          }
+        }
+      }
+    },
+    "Normal (26pt)": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Обычный (26pt)"
+          }
+        }
+      }
+    },
+    "Numbered list": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нумерованный список"
+          }
+        }
+      }
+    },
+    "OAuth 2.0": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OAuth 2.0"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OAuth 2.0"
+          }
+        }
+      }
+    },
+    "OK": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        }
+      }
+    },
+    "Offline — %lld pending": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет сети — %lld в очереди"
+          }
+        }
+      }
+    },
+    "On %@, %@ wrote:": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On %1$@, %2$@ wrote:"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@, %2$@ написал(а):"
+          }
+        }
+      }
+    },
+    "Open": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть"
+          }
+        }
+      }
+    },
+    "Open Message in New Window": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть сообщение в новом окне"
+          }
+        }
+      }
+    },
+    "Open Settings": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть настройки"
+          }
+        }
+      }
+    },
+    "Open in New Window": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть в новом окне"
+          }
+        }
+      }
+    },
+    "Operators": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Операторы"
+          }
+        }
+      }
+    },
+    "Other IMAP Server": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other IMAP Server"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Другой IMAP-сервер"
+          }
+        }
+      }
+    },
+    "Password": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пароль"
+          }
+        }
+      }
+    },
+    "Paste": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вставить"
+          }
+        }
+      }
+    },
+    "Pattern (regex)": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Шаблон (regex)"
+          }
+        }
+      }
+    },
+    "Permanently delete all messages?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить все сообщения безвозвратно?"
+          }
+        }
+      }
+    },
+    "Personal, Work, …": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Личный, Рабочий, …"
+          }
+        }
+      }
+    },
+    "Plain text": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Простой текст"
+          }
+        }
+      }
+    },
+    "Port": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Port"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Порт"
+          }
+        }
+      }
+    },
+    "Pre-download message bodies": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заранее загружать тела писем"
+          }
+        }
+      }
+    },
+    "Predicate": {},
+    "Prepend a minus sign to exclude a word.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поставьте минус перед словом, чтобы исключить его."
+          }
+        }
+      }
+    },
+    "Preview lines": {},
+    "Privacy": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Конфиденциальность"
+          }
+        }
+      }
+    },
+    "Proportional": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пропорциональный"
+          }
+        }
+      }
+    },
+    "Quick Look": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Быстрый просмотр"
+          }
+        }
+      }
+    },
+    "Quit MyEmail": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Завершить MyEmail"
+          }
+        }
+      }
+    },
+    "Quoted text colors": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Цвет цитат"
+          }
+        }
+      }
+    },
+    "Re-sync message": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пересинхронизировать"
+          }
+        }
+      }
+    },
+    "Read/Unread": {},
+    "Reading": {},
+    "Recent searches": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Недавние запросы"
+          }
+        }
+      }
+    },
+    "Recipients": {
+      "extractionState": "stale",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Получатели"
+          }
+        }
+      }
+    },
+    "Reconnect": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переподключить"
+          }
+        }
+      }
+    },
+    "Redo": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Повторить"
+          }
+        }
+      }
+    },
+    "Remote Content": {},
+    "Remote content is always loaded for trusted senders.": {},
+    "Remote images blocked": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Внешние изображения заблокированы"
+          }
+        }
+      }
+    },
+    "Remote images can be loaded per-message via the banner.": {},
+    "Remove account": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove account"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить учётную запись"
+          }
+        }
+      }
+    },
+    "Remove attachment": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить вложение"
+          }
+        }
+      }
+    },
+    "Remove pattern (regex)": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Шаблон удаления (regex)"
+          }
+        }
+      }
+    },
+    "Rename": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переименовать"
+          }
+        }
+      }
+    },
+    "Rename Folder": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переименовать папку"
+          }
+        }
+      }
+    },
+    "Rename…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переименовать…"
+          }
+        }
+      }
+    },
+    "Replacement": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Замена"
+          }
+        }
+      }
+    },
+    "Reply": {},
+    "Reply All": {},
+    "Reply-To": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ответ-Кому"
+          }
+        }
+      }
+    },
+    "Reply-To:": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ответ-Кому:"
+          }
+        }
+      }
+    },
+    "Resync Folder": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пересинхронизировать"
+          }
+        }
+      }
+    },
+    "Retry failed actions": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Повторить неудачные действия"
+          }
+        }
+      }
+    },
+    "Rewrite subject": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переписать тему"
+          }
+        }
+      }
+    },
+    "Rich text": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Форматированный текст"
+          }
+        }
+      }
+    },
+    "Row density": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Плотность строк"
+          }
+        }
+      }
+    },
+    "Rules": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Правила"
+          }
+        }
+      }
+    },
+    "Run filters on folder": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Применить правила к папке"
+          }
+        }
+      }
+    },
+    "Run filters on selected messages": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Применить правила к выделенным письмам"
+          }
+        }
+      }
+    },
+    "SMTP": {},
+    "SMTP (outgoing)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SMTP (outgoing)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SMTP (исходящие)"
+          }
+        }
+      }
+    },
+    "SMTP connection timeout": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Таймаут SMTP-соединения"
+          }
+        }
+      }
+    },
+    "SSL/TLS": {},
+    "STARTTLS": {},
+    "Safety": {},
+    "Save": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранить"
+          }
+        }
+      }
+    },
+    "Save As…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранить как…"
+          }
+        }
+      }
+    },
+    "Save to Downloads": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранить в Downloads"
+          }
+        }
+      }
+    },
+    "Saved": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранено"
+          }
+        }
+      }
+    },
+    "Search Results": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search Results"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Результаты поиска"
+          }
+        }
+      }
+    },
+    "Search help": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Справка по поиску"
+          }
+        }
+      }
+    },
+    "Search logs": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search logs"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поиск по логам"
+          }
+        }
+      }
+    },
+    "Search messages": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Найти сообщения"
+          }
+        }
+      }
+    },
+    "Search syntax": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синтаксис поиска"
+          }
+        }
+      }
+    },
+    "Search…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Поиск…"
+          }
+        }
+      }
+    },
+    "Security": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Security"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Безопасность"
+          }
+        }
+      }
+    },
+    "Select All": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выделить все"
+          }
+        }
+      }
+    },
+    "Select a folder": {
+      "extractionState": "stale",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите папку"
+          }
+        }
+      }
+    },
+    "Select a message": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите письмо"
+          }
+        }
+      }
+    },
+    "Select a rule": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите правило"
+          }
+        }
+      }
+    },
+    "Select a signature": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите подпись"
+          }
+        }
+      }
+    },
+    "Select all": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выбрать все"
+          }
+        }
+      }
+    },
+    "Select an account": {
+      "extractionState": "manual",
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выберите аккаунт"
+          }
+        }
+      }
+    },
+    "Send": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправить"
+          }
+        }
+      }
+    },
+    "Sender email hashes are sent to gravatar.com to fetch avatars.": {},
+    "Sender name": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Имя отправителя"
+          }
+        }
+      }
+    },
+    "Sent": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отправленные"
+          }
+        }
+      }
+    },
+    "Server": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сервер"
+          }
+        }
+      }
+    },
+    "Services": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Службы"
+          }
+        }
+      }
+    },
+    "Settings": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настройки"
+          }
+        }
+      }
+    },
+    "Settings…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настройки…"
+          }
+        }
+      }
+    },
+    "Show All": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показать все"
+          }
+        }
+      }
+    },
+    "Show Cc/Bcc": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показать Копия/Скрытая копия"
+          }
+        }
+      }
+    },
+    "Show Debug Log Panel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Debug Log Panel"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показать панель отладки"
+          }
+        }
+      }
+    },
+    "Show Gravatar avatars": {},
+    "Show Unified Inbox": {},
+    "Show in Finder": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показать в Finder"
+          }
+        }
+      }
+    },
+    "Show less": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Свернуть"
+          }
+        }
+      }
+    },
+    "Show search help": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показать справку по поиску"
+          }
+        }
+      }
+    },
+    "Sidebar": {},
+    "Sign in with Google": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in with Google"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Войти через Google"
+          }
+        }
+      }
+    },
+    "Sign in with Google (OAuth)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in with Google (OAuth)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Войти через Google (OAuth)"
+          }
+        }
+      }
+    },
+    "Signatures": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подписи"
+          }
+        }
+      }
+    },
+    "Size": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Размер"
+          }
+        }
+      }
+    },
+    "Special Folders": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Специальные папки"
+          }
+        }
+      }
+    },
+    "Speeds up message opening. Disable to save bandwidth.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ускоряет открытие писем. Отключите, чтобы экономить трафик."
+          }
+        }
+      }
+    },
+    "Status": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Статус"
+          }
+        }
+      }
+    },
+    "Subject": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тема"
+          }
+        }
+      }
+    },
+    "Subject:": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тема:"
+          }
+        }
+      }
+    },
+    "Subject: match words in subject only.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "subject: match words in subject only."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "subject: искать только в теме письма."
+          }
+        }
+      }
+    },
+    "Switch": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переключить"
+          }
+        }
+      }
+    },
+    "Switching to plain text will remove formatting. Continue?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переключение в простой текст удалит форматирование. Продолжить?"
+          }
+        }
+      }
+    },
+    "Sync": {},
+    "Syncing…": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Синхронизация…"
+          }
+        }
+      }
+    },
+    "Test Connection": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test Connection"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Проверить соединение"
+          }
+        }
+      }
+    },
+    "Text color": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Цвет текста"
+          }
+        }
+      }
+    },
+    "Theme": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Тема"
+          }
+        }
+      }
+    },
+    "This message contains attachments only. See the attachment bar below.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это письмо содержит только вложения. Смотрите панель вложений ниже."
+          }
+        }
+      }
+    },
+    "Threaded": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Threaded"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Цепочки"
+          }
+        }
+      }
+    },
+    "Threaded View": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Threaded View"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "С группировкой по тредам"
+          }
+        }
+      }
+    },
+    "Timeouts": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Таймауты"
+          }
+        }
+      }
+    },
+    "To": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кому"
+          }
+        }
+      }
+    },
+    "To, CC, BCC: recipient filters.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "to:, cc:, bcc: recipient filters."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "to:, cc:, bcc: фильтры получателей."
+          }
+        }
+      }
+    },
+    "To:": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Кому:"
+          }
+        }
+      }
+    },
+    "Toggle Debug Log Panel": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переключить панель отладки"
+          }
+        }
+      }
+    },
+    "Toggle Log": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Панель логов"
+          }
+        }
+      }
+    },
+    "Toggle Sidebar": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переключить боковую панель"
+          }
+        }
+      }
+    },
+    "Toggle Threading": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Группировка по цепочкам"
+          }
+        }
+      }
+    },
+    "Toggle the Debug Log Panel with ⌥⌘Y": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переключение панели отладки — ⌥⌘Y"
+          }
+        }
+      }
+    },
+    "Trash": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Корзина"
+          }
+        }
+      }
+    },
+    "Triggers": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Триггеры"
+          }
+        }
+      }
+    },
+    "Trusted Senders": {},
+    "URL": {},
+    "Underline": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подчёркнутый"
+          }
+        }
+      }
+    },
+    "Undo": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отменить"
+          }
+        }
+      }
+    },
+    "Unflag": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Снять отметку"
+          }
+        }
+      }
+    },
+    "Unified Inbox": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Все входящие"
+          }
+        }
+      }
+    },
+    "Unlimited": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Без ограничений"
+          }
+        }
+      }
+    },
+    "Use double quotes for an exact phrase.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Используйте двойные кавычки для точной фразы."
+          }
+        }
+      }
+    },
+    "Use monospace font": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Моноширинный шрифт"
+          }
+        }
+      }
+    },
+    "Use relative dates (Today, Yesterday)": {},
+    "Value": {},
+    "View": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вид"
+          }
+        }
+      }
+    },
+    "View Source": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View Source"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Исходный код"
+          }
+        }
+      }
+    },
+    "Waiting for browser…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for browser…"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ожидание браузера…"
+          }
+        }
+      }
+    },
+    "Wide": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Широкий"
+          }
+        }
+      }
+    },
+    "Wide (34pt)": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Широкий (34pt)"
+          }
+        }
+      }
+    },
+    "Window": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Окно"
+          }
+        }
+      }
+    },
+    "Window layout": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Расположение окна"
+          }
+        }
+      }
+    },
+    "You will be asked to authorize MyEmail to read and send mail for your Gmail account. MyEmail never requests access to your contacts.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You will be asked to authorize MyEmail to read and send mail for your Gmail account. MyEmail never requests access to your contacts."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вам будет предложено разрешить MyEmail читать и отправлять почту через ваш Gmail-аккаунт. MyEmail никогда не запрашивает доступ к контактам."
+          }
+        }
+      }
+    },
+    "Your name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your name"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ваше имя"
+          }
+        }
+      }
+    },
+    "Zoom": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Увеличить"
+          }
+        }
+      }
+    },
+    "and %lld more": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "и ещё %lld"
+          }
+        }
+      }
+    },
+    "contains": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "содержит"
+          }
+        }
+      }
+    },
+    "ends with": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "заканчивается на"
+          }
+        }
+      }
+    },
+    "equals": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "равно"
+          }
+        }
+      }
+    },
+    "from:anton -spam before:7d": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "from:anton -spam before:7d"
+          }
+        }
+      }
+    },
+    "imap.example.com": {},
+    "in:inbox is:unread has:attachment": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "in:inbox is:unread has:attachment"
+          }
+        }
+      }
+    },
+    "not contains": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "не содержит"
+          }
+        }
+      }
+    },
+    "smtp.example.com": {},
+    "starts with": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "начинается с"
+          }
+        }
+      }
+    },
+    "subject:\"quarterly report\" larger:1M": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "subject:\"quarterly report\" larger:1M"
+          }
+        }
+      }
+    },
+    "user@example.com": {},
+    "—": {}
+  },
+  "version": "1.0"
+}

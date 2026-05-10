@@ -1,0 +1,69 @@
+============================================================================
+MUAResolver.xpc — Third-party notice
+============================================================================
+
+This XPC service bundle contains icons, a mail-client rules database, and
+detection logic derived from the Thunderbird extension
+"Display Mail User Agent T" (also known as "dispmua"), which is itself
+based on "Display Mail User Agent":
+
+  Copyright (C) 2007       Jürgen Ernst
+  Copyright (C) 2020-2024  Toshi_  <dispmua@outlook.com>
+  Additional contributions by the dispmua / frightanic maintainers.
+
+  Upstream project:
+    https://github.com/Toshi-CMCC/display-mail-user-agent-t
+    https://addons.thunderbird.net/addon/display-mail-user-agent-t/
+
+Files derived from the upstream project:
+
+  Resources/MUAIcons/*.png      (minus mymail.png, see below)
+  Resources/mua-rules.json      (copy of content/dispmua-database.json)
+  MUAMatcher.swift              (Swift port of scripts/dispmua-common.js)
+
+These files are licensed under the GNU General Public License, version 3
+(GPL-3.0). The full license text is provided in LICENSE-GPL-3.0.txt next
+to this notice.
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation, either version 3 of the License, or (at your
+option) any later version.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+for more details.
+
+You should have received a copy of the GNU General Public License along
+with this program. If not, see <https://www.gnu.org/licenses/gpl-3.0>.
+
+============================================================================
+Project-owned assets (NOT derived from dispmua, NOT covered by GPL-3.0):
+============================================================================
+
+  Resources/MUAIcons/mymail.png    — MyEmail project icon.
+
+  main.swift
+  MUAResolverService.swift
+  MUAResolverProtocol.swift  (shared with the parent MyEmail application)
+
+These are original work of the MyEmail project and are licensed under the
+terms of the parent application. They are bundled inside this GPL-3.0 XPC
+service for distribution convenience only — they do not themselves
+constitute a derivative work of dispmua.
+
+============================================================================
+GPL-3.0 isolation note
+============================================================================
+
+This XPC service (MUAResolver.xpc) is a separate executable bundle and is
+launched in a separate process from the MyEmail host application. The host
+application and this service communicate only through a narrow Swift
+protocol (MUAResolverProtocol) over NSXPCConnection. No code or data from
+this bundle is statically or dynamically linked into the MyEmail binary.
+
+Per the FSF's own guidance on "mere aggregation" and process-separated
+components (https://www.gnu.org/licenses/gpl-faq.html#MereAggregation),
+the MyEmail host application is NOT a derivative work of dispmua and
+therefore is not subject to the GPL-3.0. Only this XPC service bundle is.
