@@ -19,4 +19,4 @@ Package.resolved
 *do_not_commit*
 .omc/
 .github/hooks/
-docs/
+private_docs/
