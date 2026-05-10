@@ -1,5 +1,7 @@
 # MyEmail
 
+<img src="MyEmail/Assets.xcassets/AppIcon.appiconset/icon_128@2x.png" width="64" alt="MyEmail icon">
+
 A macOS email client built for power users who need correctness under load — multiple accounts, large archives, unstable networks, and external clients modifying the mailbox in parallel.
 
 Inspired by MailMate and Thunderbird. No AI, no tabs, no Liquid Glass.

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MyEmail — macOS Email Client for Power Users</title>
   <meta name="description" content="A native macOS email client built for correctness under load. Multi-account, large archives, offline-capable. No AI, no telemetry, no cloud.">
+  <link rel="icon" type="image/png" href="icon.png">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -89,6 +90,15 @@
       padding: 96px 24px 80px;
       max-width: 720px;
       margin: 0 auto;
+    }
+
+    .hero-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 14px;
+      margin: 0 auto 24px;
+      display: block;
+      box-shadow: 0 8px 24px rgba(0,0,0,.15);
     }
 
     .hero-label {
@@ -359,6 +369,7 @@
 
   <!-- HERO -->
   <div class="hero">
+    <img class="hero-icon" src="icon.png" alt="MyEmail icon">
     <span class="hero-label">macOS Email Client</span>
     <h1>Email that gets out of your way</h1>
     <p class="hero-sub">
