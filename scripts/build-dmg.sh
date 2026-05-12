@@ -14,19 +14,19 @@ VOLUME_NAME="${APP_NAME}"
 echo "=== Building ${APP_NAME} ==="
 echo "Project: ${PROJECT_DIR}"
 
-# Bump CURRENT_PROJECT_VERSION (+1) across all build configurations in project.pbxproj
-PBXPROJ="${PROJECT_DIR}/${APP_NAME}.xcodeproj/project.pbxproj"
-if [ ! -f "${PBXPROJ}" ]; then
-    echo "ERROR: project.pbxproj not found at ${PBXPROJ}"
+# Bump CURRENT_PROJECT_VERSION (+1) in Configuration/Version.xcconfig
+VERSION_XCCONFIG="${PROJECT_DIR}/Configuration/Version.xcconfig"
+if [ ! -f "${VERSION_XCCONFIG}" ]; then
+    echo "ERROR: Version.xcconfig not found at ${VERSION_XCCONFIG}"
     exit 1
 fi
-CURRENT_BUILD=$(grep -m1 -E 'CURRENT_PROJECT_VERSION = [0-9]+;' "${PBXPROJ}" | grep -oE '[0-9]+')
+CURRENT_BUILD=$(grep -m1 -E '^CURRENT_PROJECT_VERSION = [0-9]+$' "${VERSION_XCCONFIG}" | grep -oE '[0-9]+')
 if [ -z "${CURRENT_BUILD}" ]; then
-    echo "ERROR: could not read CURRENT_PROJECT_VERSION from project.pbxproj"
+    echo "ERROR: could not read CURRENT_PROJECT_VERSION from ${VERSION_XCCONFIG}"
     exit 1
 fi
 NEW_BUILD=$((CURRENT_BUILD + 1))
-/usr/bin/sed -i '' -E "s/CURRENT_PROJECT_VERSION = ${CURRENT_BUILD};/CURRENT_PROJECT_VERSION = ${NEW_BUILD};/g" "${PBXPROJ}"
+/usr/bin/sed -i '' -E "s/^CURRENT_PROJECT_VERSION = ${CURRENT_BUILD}$/CURRENT_PROJECT_VERSION = ${NEW_BUILD}/" "${VERSION_XCCONFIG}"
 echo "Build number: ${CURRENT_BUILD} → ${NEW_BUILD}"
 
 # Prepare build dir (keep DerivedData for incremental builds)

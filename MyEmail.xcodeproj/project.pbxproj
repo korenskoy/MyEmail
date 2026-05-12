@@ -40,6 +40,7 @@
 /* Begin PBXFileReference section */
 		93A999242F87C5E1002CFC62 /* MyEmail.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MyEmail.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		93B54C442F9918B700774DBD /* MUAResolver.xpc */ = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = MUAResolver.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
+		93FACE0FFFFFFFFFFFFFFFF1 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -102,10 +103,19 @@
 		93A9991B2F87C5E1002CFC62 = {
 			isa = PBXGroup;
 			children = (
+				93FACE0FFFFFFFFFFFFFFFF2 /* Configuration */,
 				93A999262F87C5E1002CFC62 /* MyEmail */,
 				93B54C452F9918B700774DBD /* MUAResolver */,
 				93A999252F87C5E1002CFC62 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		93FACE0FFFFFFFFFFFFFFFF2 /* Configuration */ = {
+			isa = PBXGroup;
+			children = (
+				93FACE0FFFFFFFFFFFFFFFF1 /* Version.xcconfig */,
+			);
+			path = Configuration;
 			sourceTree = "<group>";
 		};
 		93A999252F87C5E1002CFC62 /* Products */ = {
@@ -384,13 +394,13 @@
 		};
 		93A999302F87C5E3002CFC62 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 93FACE0FFFFFFFFFFFFFFFF1 /* Version.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 169;
 				DEVELOPMENT_TEAM = UZEE5BVAH9;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
@@ -418,7 +428,6 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = ru.korenskoy.MyEmail;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -439,13 +448,13 @@
 		};
 		93A999312F87C5E3002CFC62 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 93FACE0FFFFFFFFFFFFFFFF1 /* Version.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 169;
 				DEVELOPMENT_TEAM = UZEE5BVAH9;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_DOWNLOADS_FOLDER = readwrite;
@@ -473,7 +482,6 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = ru.korenskoy.MyEmail;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
