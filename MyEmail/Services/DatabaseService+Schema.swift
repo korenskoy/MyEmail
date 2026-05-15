@@ -33,6 +33,17 @@ extension DatabaseService {
             try? db.execute(sql:
                 "ALTER TABLE messages ADD COLUMN user_agent TEXT")
 
+            // Backfill: strip stray trailing CR/LF/tabs/spaces from `subject`
+            // left by some MIME decoders. A trailing newline reserves a second
+            // line in NSTextField's intrinsic height and shifts the visible
+            // baseline upward, even with `maximumNumberOfLines = 1`.
+            // Idempotent: no-op once all rows are clean.
+            try? db.execute(sql: """
+                UPDATE messages
+                SET subject = TRIM(subject, char(10) || char(13) || char(9) || ' ')
+                WHERE subject != TRIM(subject, char(10) || char(13) || char(9) || ' ')
+                """)
+
             // FTS5 virtual table — system SQLite on macOS 15+ supports it.
             // `synchronize(withTable:)` installs AFTER INSERT/UPDATE/DELETE
             // triggers that mirror `messages` rows into `messages_fts`.

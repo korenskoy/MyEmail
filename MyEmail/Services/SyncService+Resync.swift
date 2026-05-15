@@ -84,7 +84,9 @@ extension SyncService {
         let fromParsed = email.from.first
         updated.fromAddress = fromParsed?.address ?? msg.fromAddress
         updated.fromName    = fromParsed?.name.flatMap { $0.isEmpty ? nil : $0 }
-        updated.subject     = subjectOverridden ? msg.subject : (email.subject ?? msg.subject)
+        updated.subject     = subjectOverridden
+            ? msg.subject
+            : SyncService.sanitizeSubject(email.subject ?? msg.subject)
         updated.toAddresses = email.to.map(\.formatted)
         updated.ccAddresses = email.cc.map(\.formatted)
         updated.bccAddresses = email.bcc.map(\.formatted)

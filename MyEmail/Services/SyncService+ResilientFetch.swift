@@ -195,7 +195,7 @@ extension SyncService {
 
             var info = MessageInfo(sequenceNumber: SequenceNumber(0))
             info.uid = UID(uid)
-            info.subject = email.subject
+            info.subject = SyncService.sanitizeSubject(email.subject)
             info.from = fromStr
             info.to = email.to.map(\.formatted)
             info.cc = email.cc.map(\.formatted)

@@ -1184,7 +1184,7 @@ extension SyncService {
                 let refs: [String] = info.references?.map(\.description) ?? []
                 let msgDate: Date = info.internalDate ?? info.date ?? Date()
                 let (parsedName, parsedAddr) = Self.parseFromAddress(info.from ?? "")
-                let subj: String = info.subject ?? ""
+                let subj: String = Self.sanitizeSubject(info.subject)
                 let msgID: String? = info.messageId?.description
                 let replyTo: String? = info.inReplyTo?.description
 
@@ -1290,6 +1290,14 @@ extension SyncService {
     nonisolated private static func parseFromAddress(_ raw: String) -> (name: String?, address: String) {
         guard let parsed = EmailAddress(raw) else { return (nil, raw) }
         return (parsed.name, parsed.address)
+    }
+
+    /// Strip leading/trailing whitespace and CR/LF that some MIME decoders
+    /// leave at the end of Subject. A trailing `\n` breaks NSTextField
+    /// vertical centering even with `maximumNumberOfLines = 1` because the
+    /// intrinsic content height is computed for two lines.
+    nonisolated static func sanitizeSubject(_ raw: String?) -> String {
+        (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     // MARK: - Thread-ID inheritance (Thunderbird §7.5, P2-T2)
