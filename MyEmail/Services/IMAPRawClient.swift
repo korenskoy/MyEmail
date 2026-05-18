@@ -30,9 +30,20 @@ actor IMAPRawClient {
         // NWConnection doesn't support mid-stream TLS upgrade (STARTTLS).
         // For .starttls accounts, use TLS directly — works on most servers.
         let useTLS = security != .none
-        let params: NWParameters = useTLS
-            ? NWParameters(tls: NWProtocolTLS.Options())
-            : NWParameters.tcp
+
+        // TCP keepalive (Thunderbird parity: mail.imap.tcp_keepalive.*).
+        // Detects dead one-shot raw sockets within ~60s, matching SwiftMail's
+        // primary IMAP socket policy.
+        let tcpOptions = NWProtocolTCP.Options()
+        tcpOptions.enableKeepalive = true
+        tcpOptions.keepaliveIdle = 30
+        tcpOptions.keepaliveCount = 3
+        tcpOptions.keepaliveInterval = 10
+
+        let params = NWParameters(
+            tls: useTLS ? NWProtocolTLS.Options() : nil,
+            tcp: tcpOptions
+        )
 
         let nwHost = NWEndpoint.Host(host)
         guard let nwPort = NWEndpoint.Port(rawValue: port) else {

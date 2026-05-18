@@ -384,6 +384,10 @@ extension SyncService {
     /// Subscribes to `NSWorkspace.didWakeNotification`. `Timer.scheduledTimer`
     /// is suspended while the Mac sleeps — without an explicit wake hook the
     /// first STATUS poll after wake is delayed until the next 60s tick.
+    ///
+    /// Also marks every cached IMAP socket as `needsHealthProbe = true` so the
+    /// STATUS sweep that follows does NOOP-probe → reconnect on dead sockets
+    /// instead of stumbling into a `bad(Unknown command …)` desync.
     func startWakeObserver() {
         guard wakeObserver == nil else { return }
         wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
@@ -393,12 +397,41 @@ extension SyncService {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                LogService.log(.info, .sync, "System wake — running STATUS sweep")
+                LogService.log(.info, .sync, "System wake — probing connections + STATUS sweep")
+                await self.markAllConnectionsNeedProbe()
                 await self.pollFolderStatuses()
                 await self.updateDockBadge()
             }
         }
     }
+
+    // MARK: - App foreground observer (Thunderbird `m_needNoop` parity)
+
+    /// Subscribes to `NSApplication.didBecomeActiveNotification`. When the
+    /// user brings the app back to foreground after time in App Nap or after
+    /// having been hidden, our cached IMAP connections may have been killed
+    /// silently by NAT timeout / middlebox state expiry. The TCP socket
+    /// often still reports `.ready`, but the IMAP stream is desynchronized
+    /// — the next SELECT receives `bad(Unknown command <gmail-msgid>)`.
+    ///
+    /// Marking every cached IMAPService as `needsHealthProbe = true` forces
+    /// a NOOP with a short timeout before the next real command. Failed
+    /// probes auto-reconnect inside `ensureHealthyConnection`.
+    func startForegroundObserver() {
+        guard becomeActiveObserver == nil else { return }
+        becomeActiveObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                LogService.log(.debug, .sync, "App became active — marking IMAP sockets for probe")
+                await self.markAllConnectionsNeedProbe()
+            }
+        }
+    }
+
 
     // MARK: - Execute queued action (for drain)
 

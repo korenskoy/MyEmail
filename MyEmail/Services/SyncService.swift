@@ -111,6 +111,13 @@ final class SyncService {
     /// biff manager on `wake_notification` for the same reason).
     var wakeObserver: NSObjectProtocol?
 
+    /// NSApplication.didBecomeActiveNotification observer. Marks every cached
+    /// IMAPService as needing a NOOP health probe before its next command,
+    /// mirroring Thunderbird's `m_needNoop` flag set in `ProcessImapAction`.
+    /// Catches NAT-timeout / suspend-killed connections that survived as
+    /// "ready" NWConnection/NIO channels but whose underlying TCP flow is dead.
+    var becomeActiveObserver: NSObjectProtocol?
+
     init(
         pool: DatabasePool = DatabaseService.shared.pool,
         keychain: KeychainService = .shared
@@ -438,6 +445,19 @@ final class SyncService {
         let service = IMAPService(account: account, keychain: kc)
         imapServices[account.id] = service
         return service
+    }
+
+    /// Mark every cached IMAPService (both sync + command pools) as needing
+    /// a NOOP health probe before its next command. Called from foreground /
+    /// wake observers so stale TCP sockets that survived suspend get caught
+    /// before they poison a SELECT.
+    func markAllConnectionsNeedProbe() async {
+        for (_, imap) in imapServices {
+            await imap.markNeedsProbe()
+        }
+        for (_, imap) in commandIMAPServices {
+            await imap.markNeedsProbe()
+        }
     }
 
     /// Command/body-fetch socket. Second IMAP connection per account, kept

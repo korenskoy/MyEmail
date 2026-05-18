@@ -17,9 +17,23 @@ struct ErrorBannerView: View {
             // Re-auth banners (persistent, one per account)
             ForEach(accountsNeedingReauth) { account in
                 ReauthBanner(account: account) {
-                    Task { try? await env.authService.refreshViaOAuth(
-                        accountID: account.id, email: account.email
-                    ) }
+                    Task {
+                        do {
+                            try await env.authService.refreshViaOAuth(
+                                accountID: account.id, email: account.email
+                            )
+                            // Resume sync immediately — without this IDLE/refreshAll
+                            // wouldn't pick the account back up until the next 5-min tick.
+                            await env.syncService.syncAccount(account)
+                        } catch AuthError.userCancelled {
+                            // User closed the browser; banner stays for next attempt
+                        } catch {
+                            appState.errors.append(AppError(
+                                title: "Reconnect failed",
+                                detail: String(describing: error)
+                            ))
+                        }
+                    }
                 }
             }
 

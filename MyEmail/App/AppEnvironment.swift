@@ -79,6 +79,7 @@ final class AppEnvironment {
         self.appNapActivity = sync.beginAppNapPrevention()
         sync.startPeriodicSync()
         sync.startWakeObserver()
+        sync.startForegroundObserver()
         Task { await authService.startProactiveSweep() }
 
         // Notifications

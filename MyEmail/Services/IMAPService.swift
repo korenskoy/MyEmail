@@ -25,6 +25,27 @@ actor IMAPService {
     private(set) var lastSelection: Mailbox.Selection?
     private(set) var selectedFolderPath: String?
 
+    // MARK: - Health state (Thunderbird parity §9.X)
+    /// Timestamp of last successful connect+auth. `nil` while disconnected.
+    private(set) var connectedAt: Date?
+    /// Last successful round-trip (CONNECT, SELECT, NOOP). Used by the
+    /// probe-skip freshness window so we don't NOOP-thrash a hot socket.
+    private(set) var lastActivityAt: Date?
+    /// Set by external observers (foreground / wake) to force a NOOP probe
+    /// on the next command, even if `lastActivityAt` looks fresh.
+    private(set) var needsHealthProbe: Bool = false
+
+    /// NOOP probe timeout — TB short-fail policy. Anything slower is treated
+    /// as a dead socket.
+    private static let probeTimeout: TimeInterval = 5
+    /// Skip the probe when the last successful round-trip is newer than this.
+    /// 60s matches our STATUS-poll cadence, so two probes per ping never happen.
+    private static let freshnessWindow: TimeInterval = 60
+    /// Hard cap on a single connection's lifetime — force-recycle past this.
+    /// TB doesn't enforce this directly, but its 24h IDLE rotation + auto-sync
+    /// pauses approximate the same outcome.
+    private static let maxConnectionAge: TimeInterval = 4 * 3600
+
     init(account: Account, keychain: KeychainService) {
         self.account = account
         self.keychain = keychain
@@ -100,6 +121,10 @@ actor IMAPService {
         }
 
         self.server = srv
+        let now = Date()
+        self.connectedAt = now
+        self.lastActivityAt = now
+        self.needsHealthProbe = false
         LogService.log(.info, .imap, "Connected \(account.email)")
     }
 
@@ -110,17 +135,120 @@ actor IMAPService {
         self.server = nil
         self.lastSelection = nil
         self.selectedFolderPath = nil
+        self.connectedAt = nil
+        self.lastActivityAt = nil
+        self.needsHealthProbe = false
         LogService.log(.info, .imap, "Disconnected \(account.email)")
+    }
+
+    // MARK: - Health probe (Thunderbird `m_needNoop` / `gTCPKeepalive` parity)
+
+    /// External signal that the connection may have stalled — e.g. app came
+    /// back to foreground, system woke from sleep. Next entry-point command
+    /// will run `healthProbe()` before issuing the real operation.
+    func markNeedsProbe() {
+        guard isConnected else { return }
+        self.needsHealthProbe = true
+    }
+
+    /// Age of the current connection in seconds, or `nil` if disconnected.
+    func ageInSeconds() -> TimeInterval? {
+        connectedAt.map { Date().timeIntervalSince($0) }
+    }
+
+    /// Send a NOOP with a short timeout. Returns `true` if the socket
+    /// answered cleanly within `probeTimeout`. Does NOT throw — caller decides
+    /// whether to reconnect on `false`.
+    ///
+    /// Updates `lastActivityAt` on success and clears `needsHealthProbe`.
+    func healthProbe() async -> Bool {
+        guard let srv = server else { return false }
+
+        do {
+            try await withThrowingTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    _ = try await srv.noop()
+                }
+                group.addTask { [timeout = Self.probeTimeout] in
+                    try await Task.sleep(for: .seconds(timeout))
+                    throw IMAPServiceError.probeTimedOut
+                }
+                _ = try await group.next()
+                group.cancelAll()
+            }
+            self.lastActivityAt = Date()
+            self.needsHealthProbe = false
+            return true
+        } catch {
+            LogService.log(.debug, .imap,
+                "Health probe failed for \(account.email)",
+                detail: "\(error)")
+            return false
+        }
+    }
+
+    /// Gate called from every entry-point before issuing IMAP commands.
+    /// Mirrors TB's `m_needNoop` flag + age-based connection recycling.
+    ///
+    /// Logic:
+    ///   1. Disconnected? Nothing to do — caller will explicitly `connect()`.
+    ///   2. Past hard-age cap? Force reconnect (no probe — assume dead).
+    ///   3. Fresh activity (< `freshnessWindow`) AND not explicitly stale? Skip.
+    ///   4. Otherwise: NOOP probe → on failure, reconnect with last folder.
+    private func ensureHealthyConnection() async throws {
+        guard isConnected else { return }
+
+        if let age = ageInSeconds(), age > Self.maxConnectionAge {
+            LogService.log(.info, .imap,
+                "Connection age \(Int(age))s exceeds cap; force-reconnecting",
+                detail: account.email)
+            try await reconnectInternal()
+            return
+        }
+
+        if !needsHealthProbe,
+           let last = lastActivityAt,
+           Date().timeIntervalSince(last) < Self.freshnessWindow {
+            return
+        }
+
+        let healthy = await healthProbe()
+        if !healthy {
+            LogService.log(.info, .imap,
+                "Probe failed; reconnecting",
+                detail: account.email)
+            try await reconnectInternal()
+        }
+    }
+
+    /// Tear down + rebuild the socket on the same actor, restoring the last
+    /// SELECT if any. Keeps `accessTokenProvider` (it's actor-stored).
+    private func reconnectInternal() async throws {
+        let lastFolder = selectedFolderPath
+        await disconnect()
+        try await connect()
+        if let lastFolder {
+            _ = try await selectFolderRaw(lastFolder)
+        }
     }
 
     // MARK: - SELECT
 
     @discardableResult
     func selectFolder(_ path: String) async throws -> Mailbox.Selection {
+        try await ensureHealthyConnection()
+        return try await selectFolderRaw(path)
+    }
+
+    /// Raw SELECT without probe gate — used by `reconnectInternal` to avoid
+    /// recursion through `ensureHealthyConnection` immediately after a fresh
+    /// connect (where the socket is by definition healthy).
+    private func selectFolderRaw(_ path: String) async throws -> Mailbox.Selection {
         let srv = try requireServer()
         let sel = try await srv.selectMailbox(path)
         self.lastSelection = sel
         self.selectedFolderPath = path
+        self.lastActivityAt = Date()
         return sel
     }
 
@@ -135,23 +263,28 @@ actor IMAPService {
         modSeq: UInt64,
         knownUids: Set<UInt32>? = nil
     ) async throws -> Mailbox.Selection {
+        try await ensureHealthyConnection()
         let srv = try requireServer()
         let sel = try await srv.selectMailboxWithQResync(
             path, uidValidity: uidValidity, modSeq: modSeq, knownUIDs: knownUids
         )
         self.lastSelection = sel
         self.selectedFolderPath = path
+        self.lastActivityAt = Date()
         return sel
     }
 
     /// Skip re-SELECT if folder already active on this connection.
     /// Use for read-only operations (search, body fetch, pagination).
+    /// Still runs the probe gate so a cached-SELECT shortcut doesn't bypass
+    /// stale-socket detection after wake/foreground.
     @discardableResult
     func ensureFolderSelected(_ path: String) async throws -> Mailbox.Selection {
+        try await ensureHealthyConnection()
         if selectedFolderPath == path, let sel = lastSelection {
             return sel
         }
-        return try await selectFolder(path)
+        return try await selectFolderRaw(path)
     }
 
     // MARK: - Fetch headers
@@ -299,4 +432,5 @@ enum IMAPServiceError: Error, Sendable {
     case notConnected
     case authenticationFailed
     case folderNotFound(String)
+    case probeTimedOut
 }
