@@ -92,10 +92,10 @@ final class ComposeWindowController: NSWindowController, NSWindowDelegate {
 
     private static func title(for mode: ComposeMode) -> String {
         switch mode {
-        case .newMessage: return String(localized: "New Message")
-        case .reply:      return String(localized: "Reply")
-        case .replyAll:   return String(localized: "Reply All")
-        case .forward:    return String(localized: "Forward")
+        case .newMessage, .mailto: return String(localized: "New Message")
+        case .reply:               return String(localized: "Reply")
+        case .replyAll:            return String(localized: "Reply All")
+        case .forward:             return String(localized: "Forward")
         }
     }
 }

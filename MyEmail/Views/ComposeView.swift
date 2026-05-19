@@ -54,7 +54,7 @@ struct ComposeWindowContent: View {
 
     private var needsMessage: Bool {
         switch mode {
-        case .newMessage: return false
+        case .newMessage, .mailto: return false
         case .reply, .replyAll, .forward: return true
         }
     }
@@ -92,7 +92,7 @@ struct ComposeView: View {
     @State var selectedAccountID: UUID
     @State var toField: String = ""
     @State var ccField: String = ""
-    @State private var bccField: String = ""
+    @State var bccField: String = ""
     @State private var replyToField: String = ""
     @State var subjectField: String = ""
     @State var attributedBody = NSAttributedString(string: "")
@@ -295,7 +295,7 @@ struct ComposeView: View {
     private func replyThreadingHeaders() -> (inReplyTo: String?, references: [String]) {
         let isReply: Bool = switch mode {
         case .reply, .replyAll: true
-        case .forward, .newMessage: false
+        case .forward, .newMessage, .mailto: false
         }
         guard isReply, let msg = message,
               let msgID = msg.messageID, !msgID.isEmpty else {

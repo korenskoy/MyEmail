@@ -23,9 +23,23 @@ extension ComposeView {
     }()
 
     func prefill() {
+        // Mailto needs no source Message — apply prefill regardless.
+        if case .mailto(_, let prefill) = mode {
+            toField = prefill.to
+            ccField = prefill.cc
+            bccField = prefill.bcc
+            subjectField = prefill.subject
+            if !prefill.body.isEmpty {
+                attributedBody = NSAttributedString(
+                    string: prefill.body,
+                    attributes: RichTextSupport.defaultTypingAttributes
+                )
+            }
+            return
+        }
         guard let msg = message else { return }
         switch mode {
-        case .newMessage:
+        case .newMessage, .mailto:
             break
         case .reply:
             toField = msg.replyToAddresses.first ?? msg.fromAddress

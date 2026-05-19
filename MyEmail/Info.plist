@@ -14,6 +14,16 @@
 				<string>com.googleusercontent.apps.855667893920-d5kf9r5uilc7jhn3vdv3cebjm9dagrsn</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>ru.korenskoy.MyEmail.mailto</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>mailto</string>
+			</array>
+		</dict>
 	</array>
 	<key>NSContactsUsageDescription</key>
 	<string>MyEmail uses your contacts for recipient autocomplete when composing messages.</string>

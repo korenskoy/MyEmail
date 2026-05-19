@@ -84,6 +84,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             if isOAuthCallback(url) {
                 OAuthCallbackBroker.shared.deliver(url)
+            } else if url.scheme?.lowercased() == "mailto" {
+                if let prefill = MailtoParser.parse(url) {
+                    openCompose(mode: .mailto(id: UUID(), prefill: prefill))
+                }
             } else if url.isFileURL,
                       url.pathExtension.lowercased() == "eml" {
                 EmlViewerService.shared.open(url: url)
