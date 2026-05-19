@@ -556,12 +556,6 @@
     "Cancel": {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancel"
-          }
-        },
         "ru": {
           "stringUnit": {
             "state": "translated",
@@ -870,6 +864,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Удалить"
+          }
+        }
+      }
+    },
+    "Delete %d messages permanently?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить %d писем безвозвратно?"
+          }
+        }
+      }
+    },
+    "Delete this message permanently?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалить это письмо безвозвратно?"
           }
         }
       }
@@ -1881,6 +1895,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Моноширинный"
+          }
+        }
+      }
+    },
+    "Move %d messages to Trash?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переместить %d писем в Корзину?"
           }
         }
       }
@@ -3189,6 +3213,16 @@
         }
       }
     },
+    "This action cannot be undone.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это действие нельзя отменить."
+          }
+        }
+      }
+    },
     "This message contains attachments only. See the attachment bar below.": {
       "localizations": {
         "ru": {
@@ -3503,6 +3537,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Расположение окна"
+          }
+        }
+      }
+    },
+    "You can restore them from the Trash folder.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Их можно восстановить из папки Корзина."
           }
         }
       }

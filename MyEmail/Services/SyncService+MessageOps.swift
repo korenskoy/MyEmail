@@ -234,9 +234,63 @@ extension SyncService {
         }
     }
 
-    // MARK: - Delete
+    // MARK: - Delete (MOVE → Trash; permanent only via expungeMessages)
 
+    /// Move messages to their account's Trash folder. Reversible via the
+    /// Undo stack and recoverable by user from the Trash folder itself.
+    /// Messages already located in Trash are expunged (permanent) instead;
+    /// accounts without a Trash special-use folder also fall back to expunge.
     func deleteMessages(_ messageIDs: [UUID]) async {
+        guard !messageIDs.isEmpty else { return }
+
+        struct Plan: Sendable {
+            let toMove: [UUID: UUID]   // messageID → trash folder UUID
+            let toExpunge: [UUID]
+        }
+
+        let plan: Plan? = try? await pool.read { db in
+            let messages = try Message
+                .filter(messageIDs.contains(Column("id")))
+                .fetchAll(db)
+
+            var toMove: [UUID: UUID] = [:]
+            var toExpunge: [UUID] = []
+            // Cache Trash lookup per account.
+            var trashByAccount: [UUID: Folder?] = [:]
+            for msg in messages {
+                let trash = try trashByAccount[msg.accountID]
+                    ?? Folder
+                        .filter(Column("account_id") == msg.accountID)
+                        .filter(Column("special_use") == SpecialUse.trash)
+                        .fetchOne(db)
+                trashByAccount[msg.accountID] = trash
+                if let trash, trash.id != msg.folderID {
+                    toMove[msg.id] = trash.id
+                } else {
+                    // Already in Trash, or account has no Trash folder.
+                    toExpunge.append(msg.id)
+                }
+            }
+            return Plan(toMove: toMove, toExpunge: toExpunge)
+        }
+
+        guard let plan else { return }
+
+        // Group MOVE candidates by target Trash folder to batch per folder.
+        let byTrash = Dictionary(grouping: plan.toMove.keys, by: { plan.toMove[$0]! })
+        for (trashID, ids) in byTrash {
+            await moveMessages(ids, to: trashID)
+        }
+        if !plan.toExpunge.isEmpty {
+            await expungeMessages(plan.toExpunge)
+        }
+    }
+
+    /// Permanent server-side delete: `STORE +FLAGS \Deleted` + `EXPUNGE`.
+    /// Cannot be undone. Reserved for messages already in Trash or accounts
+    /// with no Trash folder; the higher-level Delete flow goes through
+    /// `deleteMessages` which prefers MOVE → Trash.
+    func expungeMessages(_ messageIDs: [UUID]) async {
         guard !messageIDs.isEmpty else { return }
 
         let context = try? await pool.read { db -> (UUID, String, UUID, [UInt32], UInt32?)? in
@@ -250,7 +304,7 @@ extension SyncService {
 
         guard let (folderID, folderPath, accountID, uids, uidValidity) = context else { return }
 
-        // IDLE gate (§9.14): prevent IDLE reconcile during bulk delete
+        // IDLE gate (§9.14): prevent IDLE reconcile during bulk expunge
         bulkOpFolderIDs.insert(folderID)
         defer {
             bulkOpFolderIDs.remove(folderID)
@@ -259,7 +313,7 @@ extension SyncService {
             }
         }
 
-        // Optimistic: delete locally
+        // Optimistic: drop locally
         try? await pool.write { db in
             try Message.filter(messageIDs.contains(Column("id"))).deleteAll(db)
         }
@@ -282,7 +336,7 @@ extension SyncService {
                 )
                 try? await offlineQueue?.enqueue(action)
             }
-            LogService.log(.warning, .sync, "Delete queued for retry", detail: "\(error)")
+            LogService.log(.warning, .sync, "Expunge queued for retry", detail: "\(error)")
         }
     }
 
