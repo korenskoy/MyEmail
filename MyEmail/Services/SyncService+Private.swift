@@ -1218,7 +1218,7 @@ extension SyncService {
                     isRead: isRead, isFlagged: isFlagged,
                     isAnswered: isAnswered, isForwarded: isForwarded,
                     isDraft: isDraft,
-                    size: 0, threadID: tid,
+                    size: info.size ?? 0, threadID: tid,
                     bodyText: nil, bodyHTML: nil, downloadState: .envelope,
                     hasAttachments: detectedAttachments,
                     listID: listID,
