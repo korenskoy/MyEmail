@@ -310,7 +310,8 @@ actor IMAPService {
         let from = total > UInt32(count) ? total - UInt32(count) + 1 : 1
         let srv = try await requireServer()
         return try await srv.fetchMessageInfos(
-            sequenceRange: SequenceNumber(from)...SequenceNumber(total)
+            sequenceRange: SequenceNumber(from)...SequenceNumber(total),
+            options: .noEnvelope
         )
     }
 
@@ -330,7 +331,8 @@ actor IMAPService {
         guard total > 0 else { return [] }
         let srv = try await requireServer()
         return try await srv.fetchMessageInfos(
-            sequenceRange: SequenceNumber(1)...SequenceNumber(total)
+            sequenceRange: SequenceNumber(1)...SequenceNumber(total),
+            options: .noEnvelope
         )
     }
 
@@ -341,7 +343,7 @@ actor IMAPService {
     /// streams back in one server round-trip.
     func fetchHeaders(sequenceRange: ClosedRange<SequenceNumber>) async throws -> [MessageInfo] {
         let srv = try await requireServer()
-        return try await srv.fetchMessageInfos(sequenceRange: sequenceRange)
+        return try await srv.fetchMessageInfos(sequenceRange: sequenceRange, options: .noEnvelope)
     }
 
     /// Fetch headers for a specific UID range (for incremental sync).
@@ -349,7 +351,7 @@ actor IMAPService {
         uidRange: ClosedRange<UID>
     ) async throws -> [MessageInfo] {
         let srv = try await requireServer()
-        return try await srv.fetchMessageInfos(uidRange: uidRange)
+        return try await srv.fetchMessageInfos(uidRange: uidRange, options: .noEnvelope)
     }
 
     /// Fetch headers for UIDs >= startUID (open-ended).
@@ -357,7 +359,7 @@ actor IMAPService {
         from startUID: UID
     ) async throws -> [MessageInfo] {
         let srv = try await requireServer()
-        return try await srv.fetchMessageInfos(uidRange: startUID...)
+        return try await srv.fetchMessageInfos(uidRange: startUID..., options: .noEnvelope)
     }
 
     /// Fetch raw RFC822 source for a single UID (View Source).
@@ -382,7 +384,7 @@ actor IMAPService {
         var set = UIDSet()
         for uid in uids { set.insert(UID(uid)) }
         let srv = try await requireServer()
-        return try await srv.fetchMessageInfosBulk(using: set)
+        return try await srv.fetchMessageInfosBulk(using: set, options: .noEnvelope)
     }
 
     /// Fetch flags for a single UID via FETCH (FLAGS). Used by rawHeaderFallback.

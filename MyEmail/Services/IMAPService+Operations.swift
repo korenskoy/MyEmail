@@ -224,16 +224,18 @@ extension IMAPService {
     }
 
 
-    /// CONDSTORE delta FETCH (RFC 7162 §3.1.2). Returns full `MessageInfo`
-    /// (envelope, flags, internalDate, bodyStructure, modSequence) for every
-    /// UID whose MODSEQ > `changedSince`. Single round-trip over `1:*` —
-    /// server filters by MODSEQ. Each response line is per-message (≤1 KB),
-    /// so the 8 KB line-length limit in swift-nio-imap never trips here
-    /// — unlike an open-ended UID SEARCH over a large mailbox.
+    /// CONDSTORE delta FETCH (RFC 7162 §3.1.2). Returns `MessageInfo` (uid,
+    /// flags, internalDate, fullHeader, modSequence — no envelope/bodyStructure)
+    /// for every UID whose MODSEQ > `changedSince`. Single round-trip over `1:*`
+    /// — server filters by MODSEQ. Each response line is per-message (≤1 KB),
+    /// so the 8 KB line-length limit in swift-nio-imap never trips here —
+    /// unlike an open-ended UID SEARCH over a large mailbox.
     func fetchChangedInfos(changedSince: UInt64) async throws -> [MessageInfo] {
         let srv = try await requireServer()
         return try await srv.fetchMessageInfos(
-            uidRange: UID(1)..., changedSince: changedSince
+            uidRange: UID(1)...,
+            options: .noEnvelope,
+            changedSince: changedSince
         )
     }
 
