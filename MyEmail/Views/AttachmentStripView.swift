@@ -32,7 +32,13 @@ struct AttachmentStripView: View {
     private func attachmentChip(_ att: Attachment) -> some View {
         let isRefetching = refetchingIDs.contains(att.id)
         Button {
-            Task { await quickLookAttachment(att) }
+            Task {
+                if Self.isEml(att) {
+                    await openInEmlViewer(att)
+                } else {
+                    await quickLookAttachment(att)
+                }
+            }
         } label: {
             HStack(spacing: 6) {
                 if isRefetching {
@@ -101,7 +107,23 @@ struct AttachmentStripView: View {
 
     private func openAttachment(_ att: Attachment) async {
         guard let path = await ensureLocalFile(att) else { return }
-        NSWorkspace.shared.open(URL(fileURLWithPath: path))
+        if Self.isEml(att) {
+            EmlViewerService.shared.open(url: URL(fileURLWithPath: path))
+        } else {
+            NSWorkspace.shared.open(URL(fileURLWithPath: path))
+        }
+    }
+
+    private func openInEmlViewer(_ att: Attachment) async {
+        guard let path = await ensureLocalFile(att) else { return }
+        EmlViewerService.shared.open(url: URL(fileURLWithPath: path))
+    }
+
+    /// True when the attachment looks like an RFC822 message — either via
+    /// MIME type or the `.eml` extension on the synthesized filename.
+    nonisolated private static func isEml(_ att: Attachment) -> Bool {
+        if att.mimeType.lowercased() == "message/rfc822" { return true }
+        return att.filename.lowercased().hasSuffix(".eml")
     }
 
     private func saveAs(_ att: Attachment) async {

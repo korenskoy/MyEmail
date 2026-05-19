@@ -73,7 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LogService.shared.log(.info, .uiDebug, "NSApplication willTerminate")
     }
 
-    // MARK: - OAuth callback
+    // MARK: - URL / file open
 
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
@@ -84,6 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
             if isOAuthCallback(url) {
                 OAuthCallbackBroker.shared.deliver(url)
+            } else if url.isFileURL,
+                      url.pathExtension.lowercased() == "eml" {
+                EmlViewerService.shared.open(url: url)
             }
         }
     }
