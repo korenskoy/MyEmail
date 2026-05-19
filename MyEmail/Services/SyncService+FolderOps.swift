@@ -35,7 +35,7 @@ extension SyncService {
         }
     }
 
-    // MARK: - Rename folder (IMAP RENAME via raw client)
+    // MARK: - Rename folder (IMAP RENAME)
 
     func renameFolder(folderID: UUID, newName: String) async {
         let pool = DatabaseService.shared.pool
@@ -68,7 +68,7 @@ extension SyncService {
         }
     }
 
-    // MARK: - Delete folder (IMAP DELETE via raw client)
+    // MARK: - Delete folder (IMAP DELETE)
 
     func deleteFolder(folderID: UUID) async {
         let pool = DatabaseService.shared.pool

@@ -15,14 +15,14 @@ extension IMAPService {
     func addFlags(_ flags: [Flag], uids: [UInt32]) async throws {
         guard !uids.isEmpty else { return }
         let set = UIDSet(uids.map { UID($0) })
-        let srv = try requireServer()
+        let srv = try await requireServer()
         try await srv.store(flags: flags, on: set, operation: StoreData.StoreType.add)
     }
 
     func removeFlags(_ flags: [Flag], uids: [UInt32]) async throws {
         guard !uids.isEmpty else { return }
         let set = UIDSet(uids.map { UID($0) })
-        let srv = try requireServer()
+        let srv = try await requireServer()
         try await srv.store(flags: flags, on: set, operation: StoreData.StoreType.remove)
     }
 
@@ -47,7 +47,7 @@ extension IMAPService {
     func moveMessages(uids: [UInt32], to destination: String) async throws {
         guard !uids.isEmpty else { return }
         let set = UIDSet(uids.map { UID($0) })
-        let srv = try requireServer()
+        let srv = try await requireServer()
         try await srv.move(messages: set, to: destination)
     }
 
@@ -56,7 +56,7 @@ extension IMAPService {
     func archiveMessages(uids: [UInt32]) async throws {
         guard !uids.isEmpty else { return }
         let set = UIDSet(uids.map { UID($0) })
-        let srv = try requireServer()
+        let srv = try await requireServer()
         try await srv.archive(messages: set)
     }
 
@@ -65,7 +65,7 @@ extension IMAPService {
     func deleteMessages(uids: [UInt32]) async throws {
         guard !uids.isEmpty else { return }
         let set = UIDSet(uids.map { UID($0) })
-        let srv = try requireServer()
+        let srv = try await requireServer()
         try await srv.store(flags: [Flag.deleted], on: set, operation: StoreData.StoreType.add)
         do {
             try await srv.expunge(messages: set)
@@ -91,7 +91,7 @@ extension IMAPService {
         identifierSet: MessageIdentifierSet<UID>? = nil,
         criteria: [SearchCriteria]
     ) async throws -> Set<UInt32> {
-        let srv = try requireServer()
+        let srv = try await requireServer()
         let result: ExtendedSearchResult<UID> = try await srv.extendedSearch(
             identifierSet: identifierSet, criteria: criteria, calendar: .current
         )
@@ -176,7 +176,7 @@ extension IMAPService {
         uidRange: PartialRangeFrom<UID> = UID(1)...,
         changedSince: UInt64? = nil
     ) async throws -> [(uid: UInt32, flags: [Flag], modSeq: UInt64?)] {
-        let srv = try requireServer()
+        let srv = try await requireServer()
         let infos = try await srv.fetchFlagsOnly(
             using: UIDSet(uidRange), changedSince: changedSince
         )
@@ -193,7 +193,7 @@ extension IMAPService {
         uidRange: ClosedRange<UInt32>,
         changedSince: UInt64? = nil
     ) async throws -> [(uid: UInt32, flags: [Flag], modSeq: UInt64?)] {
-        let srv = try requireServer()
+        let srv = try await requireServer()
         let set = MessageIdentifierSet<UID>(UID(uidRange.lowerBound)...UID(uidRange.upperBound))
         let infos = try await srv.fetchFlagsOnly(
             using: set, changedSince: changedSince
@@ -209,7 +209,7 @@ extension IMAPService {
     /// Whether the current IMAP connection advertised CONDSTORE (RFC 7162).
     var supportsCondStore: Bool {
         get async {
-            guard let srv = try? requireServer() else { return false }
+            guard let srv = try? await requireServer() else { return false }
             return await srv.supportsCondStore
         }
     }
@@ -218,7 +218,7 @@ extension IMAPService {
     /// QRESYNC implies CONDSTORE.
     var supportsQResync: Bool {
         get async {
-            guard let srv = try? requireServer() else { return false }
+            guard let srv = try? await requireServer() else { return false }
             return await srv.supportsQResync
         }
     }
@@ -231,7 +231,7 @@ extension IMAPService {
     /// so the 8 KB line-length limit in swift-nio-imap never trips here
     /// — unlike an open-ended UID SEARCH over a large mailbox.
     func fetchChangedInfos(changedSince: UInt64) async throws -> [MessageInfo] {
-        let srv = try requireServer()
+        let srv = try await requireServer()
         return try await srv.fetchMessageInfos(
             uidRange: UID(1)..., changedSince: changedSince
         )
@@ -254,24 +254,22 @@ extension IMAPService {
     // MARK: - Create folder (IMAP CREATE)
 
     func createFolder(path: String) async throws {
-        let srv = try requireServer()
+        let srv = try await requireServer()
         try await srv.createMailbox(path)
     }
 
-    // MARK: - Raw IMAP commands (DELETE, RENAME, EXAMINE — not in SwiftMail)
+    // MARK: - Raw IMAP commands (EXAMINE — not in SwiftMail)
 
     /// IMAP DELETE mailbox — RFC 3501 §6.3.4
     func deleteMailbox(_ path: String) async throws {
-        let raw = try await createAuthenticatedRawClient()
-        defer { Task { await raw.logout() } }
-        try await raw.deleteMailbox(path)
+        let srv = try await requireServer()
+        try await srv.deleteMailbox(path)
     }
 
     /// IMAP RENAME mailbox — RFC 3501 §6.3.5
     func renameMailbox(from oldPath: String, to newPath: String) async throws {
-        let raw = try await createAuthenticatedRawClient()
-        defer { Task { await raw.logout() } }
-        try await raw.renameMailbox(from: oldPath, to: newPath)
+        let srv = try await requireServer()
+        try await srv.renameMailbox(from: oldPath, to: newPath)
     }
 
     /// IMAP EXAMINE (read-only SELECT) — RFC 3501 §6.3.2
@@ -286,7 +284,7 @@ extension IMAPService {
     /// IMAP STATUS command — returns counts + UIDs without selecting the folder.
     /// Used for periodic polling of all folders to detect changes cheaply.
     func mailboxStatus(_ path: String) async throws -> Mailbox.Status {
-        let srv = try requireServer()
+        let srv = try await requireServer()
         return try await srv.mailboxStatus(path)
     }
 
@@ -294,14 +292,14 @@ extension IMAPService {
 
     /// IMAP APPEND — saves a composed email to the given folder with \Seen flag.
     func appendMessage(_ email: SwiftMail.Email, to mailbox: String) async throws {
-        let srv = try requireServer()
+        let srv = try await requireServer()
         try await srv.append(email: email, to: mailbox, flags: [.seen])
     }
 
     /// IMAP APPEND raw RFC822 message with explicit flags. Returns new UID if server supports UIDPLUS.
     @discardableResult
     func appendRawMessage(_ raw: String, to mailbox: String, flags: [Flag], date: Date?) async throws -> UInt32? {
-        let srv = try requireServer()
+        let srv = try await requireServer()
         let result = try await srv.append(rawMessage: raw, to: mailbox, flags: flags, internalDate: date)
         return result.firstUID?.value
     }
@@ -310,7 +308,7 @@ extension IMAPService {
 
     /// Legacy IDLE on the currently selected folder.
     func startIDLE() async throws -> AsyncStream<IMAPServerEvent> {
-        let srv = try requireServer()
+        let srv = try await requireServer()
         return try await srv.idle()
     }
 
@@ -318,14 +316,14 @@ extension IMAPService {
     /// folder. SwiftMail opens a separate connection so it doesn't conflict
     /// with the primary selection used for FETCH/SELECT.
     func startIDLE(on folderPath: String) async throws -> IMAPIdleSession {
-        let srv = try requireServer()
+        let srv = try await requireServer()
         return try await srv.idle(on: folderPath)
     }
 
     // MARK: - NOOP
 
     func noop() async throws -> [IMAPServerEvent] {
-        let srv = try requireServer()
+        let srv = try await requireServer()
         return try await srv.noop()
     }
 }

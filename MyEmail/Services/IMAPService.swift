@@ -146,9 +146,18 @@ actor IMAPService {
     /// External signal that the connection may have stalled — e.g. app came
     /// back to foreground, system woke from sleep. Next entry-point command
     /// will run `healthProbe()` before issuing the real operation.
+    ///
+    /// Also invalidates the cached `selectedFolderPath`/`lastSelection`:
+    /// NOOP is stateless and answers fine on a half-broken Gmail session
+    /// where the server has implicitly dropped our SELECTED state. The next
+    /// `ensureFolderSelected` must perform a real SELECT — relying on the
+    /// pre-suspend cache is what produced `BAD UID FETCH not allowed now`
+    /// after a successful probe.
     func markNeedsProbe() {
         guard isConnected else { return }
         self.needsHealthProbe = true
+        self.selectedFolderPath = nil
+        self.lastSelection = nil
     }
 
     /// Age of the current connection in seconds, or `nil` if disconnected.
@@ -240,11 +249,11 @@ actor IMAPService {
         return try await selectFolderRaw(path)
     }
 
-    /// Raw SELECT without probe gate — used by `reconnectInternal` to avoid
-    /// recursion through `ensureHealthyConnection` immediately after a fresh
-    /// connect (where the socket is by definition healthy).
+    /// Raw SELECT without probe gate — used by `reconnectInternal` and from
+    /// the probe-gated `selectFolder` itself (where probing already happened
+    /// in the outer call). Goes through `serverOrThrow` to avoid recursion.
     private func selectFolderRaw(_ path: String) async throws -> Mailbox.Selection {
-        let srv = try requireServer()
+        let srv = try serverOrThrow()
         let sel = try await srv.selectMailbox(path)
         self.lastSelection = sel
         self.selectedFolderPath = path
@@ -264,7 +273,7 @@ actor IMAPService {
         knownUids: Set<UInt32>? = nil
     ) async throws -> Mailbox.Selection {
         try await ensureHealthyConnection()
-        let srv = try requireServer()
+        let srv = try serverOrThrow()
         let sel = try await srv.selectMailboxWithQResync(
             path, uidValidity: uidValidity, modSeq: modSeq, knownUIDs: knownUids
         )
@@ -299,8 +308,10 @@ actor IMAPService {
         let total = UInt32(sel.messageCount)
         guard total > 0 else { return [] }
         let from = total > UInt32(count) ? total - UInt32(count) + 1 : 1
-        return try await requireServer()
-            .fetchMessageInfos(sequenceRange: SequenceNumber(from)...SequenceNumber(total))
+        let srv = try await requireServer()
+        return try await srv.fetchMessageInfos(
+            sequenceRange: SequenceNumber(from)...SequenceNumber(total)
+        )
     }
 
     /// Fetch headers for every message in the selected folder via
@@ -317,8 +328,10 @@ actor IMAPService {
         let sel = try await selectFolder(folderPath)
         let total = UInt32(sel.messageCount)
         guard total > 0 else { return [] }
-        return try await requireServer()
-            .fetchMessageInfos(sequenceRange: SequenceNumber(1)...SequenceNumber(total))
+        let srv = try await requireServer()
+        return try await srv.fetchMessageInfos(
+            sequenceRange: SequenceNumber(1)...SequenceNumber(total)
+        )
     }
 
     /// Fetch headers for a sequence-number range. Thin wrapper so callers
@@ -327,35 +340,40 @@ actor IMAPService {
     /// (no internal chunking for sequence ranges), so the whole range
     /// streams back in one server round-trip.
     func fetchHeaders(sequenceRange: ClosedRange<SequenceNumber>) async throws -> [MessageInfo] {
-        try await requireServer().fetchMessageInfos(sequenceRange: sequenceRange)
+        let srv = try await requireServer()
+        return try await srv.fetchMessageInfos(sequenceRange: sequenceRange)
     }
 
     /// Fetch headers for a specific UID range (for incremental sync).
     func fetchHeaders(
         uidRange: ClosedRange<UID>
     ) async throws -> [MessageInfo] {
-        try await requireServer()
-            .fetchMessageInfos(uidRange: uidRange)
+        let srv = try await requireServer()
+        return try await srv.fetchMessageInfos(uidRange: uidRange)
     }
 
     /// Fetch headers for UIDs >= startUID (open-ended).
     func fetchHeaders(
         from startUID: UID
     ) async throws -> [MessageInfo] {
-        try await requireServer()
-            .fetchMessageInfos(uidRange: startUID...)
+        let srv = try await requireServer()
+        return try await srv.fetchMessageInfos(uidRange: startUID...)
     }
 
     /// Fetch raw RFC822 source for a single UID (View Source).
+    /// Uses MyEmail fork's chunked 256 KB BODY.PEEK[]<offset.count> fetch so the
+    /// channel idles between chunks and unsolicited EXISTS/FLAGS drain cleanly.
     func fetchRawMessage(uid: UInt32) async throws -> Data {
-        try await requireServer().fetchRawMessage(identifier: UID(uid))
+        let srv = try await requireServer()
+        return try await srv.fetchRawMessageChunked(identifier: UID(uid))
     }
 
     /// Pipelined fetch of MIME parts for multiple UIDs (preview snippets).
     func fetchPartsPipelined(
         parts: [(uid: UID, section: Section)]
     ) async throws -> [UID: [(section: Section, data: Data)]] {
-        try await requireServer().fetchPartsPipelined(parts: parts)
+        let srv = try await requireServer()
+        return try await srv.fetchPartsPipelined(parts: parts)
     }
 
     /// Fetch headers for a specific set of UIDs (non-contiguous).
@@ -363,12 +381,14 @@ actor IMAPService {
         guard !uids.isEmpty else { return [] }
         var set = UIDSet()
         for uid in uids { set.insert(UID(uid)) }
-        return try await requireServer().fetchMessageInfosBulk(using: set)
+        let srv = try await requireServer()
+        return try await srv.fetchMessageInfosBulk(using: set)
     }
 
     /// Fetch flags for a single UID via FETCH (FLAGS). Used by rawHeaderFallback.
     func fetchSingleMessageInfo(uid: UInt32) async throws -> MessageInfo? {
-        try await requireServer().fetchMessageInfo(for: UID(uid))
+        let srv = try await requireServer()
+        return try await srv.fetchMessageInfo(for: UID(uid))
     }
 
     // MARK: - List all UIDs (for reconcile)
@@ -381,11 +401,13 @@ actor IMAPService {
     // MARK: - List folders
 
     func listFolders() async throws -> [Mailbox.Info] {
-        try await requireServer().listSpecialUseMailboxes()
+        let srv = try await requireServer()
+        return try await srv.listSpecialUseMailboxes()
     }
 
     func listAllFolders() async throws -> [Mailbox.Info] {
-        try await requireServer().listMailboxes()
+        let srv = try await requireServer()
+        return try await srv.listMailboxes()
     }
 
     // MARK: - Raw client factory (for commands SwiftMail doesn't expose)
@@ -418,7 +440,20 @@ actor IMAPService {
 
     // MARK: - Private
 
-    func requireServer() throws -> IMAPServer {
+    /// Probe-gated server accessor. All entry-point IMAP ops MUST use this
+    /// (Thunderbird `m_needNoop` parity): runs `ensureHealthyConnection()`
+    /// which does a short-timeout NOOP probe + auto-reconnect when the
+    /// socket has been idle, marked stale by foreground/wake observers, or
+    /// past the hard age cap. Cheap fast-path when `lastActivityAt` is fresh.
+    func requireServer() async throws -> IMAPServer {
+        try await ensureHealthyConnection()
+        return try serverOrThrow()
+    }
+
+    /// Server accessor without probe. Used by code paths where probing
+    /// would recurse (probe itself, reconnect) or where the caller has
+    /// just made a fresh round-trip (selectFolderRaw after connect).
+    private func serverOrThrow() throws -> IMAPServer {
         guard let server else {
             throw IMAPServiceError.notConnected
         }
