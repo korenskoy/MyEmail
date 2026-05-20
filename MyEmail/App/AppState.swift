@@ -289,7 +289,10 @@ final class AppState {
     func observeAccounts() {
         accountsCancellable = ValueObservation
             .tracking { db in
-                try Account.order(Column("email").asc).fetchAll(db)
+                // Match AccountRepository.all() so sidebar order == Settings order.
+                try Account
+                    .order(Column("sort_order").asc, Column("name").asc)
+                    .fetchAll(db)
             }
             .start(in: pool, scheduling: .immediate) { error in
                 LogService.log(.error, .db, "Accounts observation error", detail: "\(error)")

@@ -37,7 +37,8 @@ struct AccountSettingsView: View {
             VStack(spacing: 0) {
                 AccountListPane(
                     accounts: accounts,
-                    selectedAccountID: $selectedAccountID
+                    selectedAccountID: $selectedAccountID,
+                    onMove: moveAccounts
                 )
                 Divider()
                 AddRemoveToolbar(
@@ -149,6 +150,22 @@ struct AccountSettingsView: View {
             self.loadError = String(describing: error)
         }
     }
+
+    private func moveAccounts(from source: IndexSet, to destination: Int) {
+        var reordered = accounts
+        reordered.move(fromOffsets: source, toOffset: destination)
+        accounts = reordered
+        do {
+            try env.accountRepository.reorder(reordered.map(\.id))
+            // Mirror into live AppState so sidebar reflects the new order
+            // synchronously — ValueObservation will reconfirm shortly after.
+            appState.accounts = (try? env.accountRepository.all()) ?? appState.accounts
+            appState.rebuildAccountLookup()
+        } catch {
+            self.loadError = String(describing: error)
+            Task { await reload() }
+        }
+    }
 }
 
 // MARK: - List pane
@@ -156,11 +173,15 @@ struct AccountSettingsView: View {
 struct AccountListPane: View {
     let accounts: [Account]
     @Binding var selectedAccountID: Account.ID?
+    let onMove: (IndexSet, Int) -> Void
 
     var body: some View {
-        List(accounts, selection: $selectedAccountID) { account in
-            AccountListRow(account: account)
-                .tag(account.id)
+        List(selection: $selectedAccountID) {
+            ForEach(accounts) { account in
+                AccountListRow(account: account)
+                    .tag(account.id)
+            }
+            .onMove(perform: onMove)
         }
         .listStyle(.sidebar)
         .environment(\.defaultMinListRowHeight, 40)

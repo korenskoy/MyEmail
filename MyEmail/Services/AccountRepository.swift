@@ -94,6 +94,19 @@ final class AccountRepository: Sendable {
         }
     }
 
+    /// Persist a new account order. Rewrites `sort_order` for the given ids
+    /// as 0..n-1 in a single write, so sidebar + Settings stay in sync.
+    nonisolated func reorder(_ ids: [UUID]) throws {
+        try pool.write { db in
+            for (index, id) in ids.enumerated() {
+                try db.execute(
+                    sql: "UPDATE accounts SET sort_order = ? WHERE id = ?",
+                    arguments: [index, id]
+                )
+            }
+        }
+    }
+
     // MARK: - Delete
 
     /// Cascade delete: GRDB row (ON DELETE CASCADE) → Keychain → attachment files.
