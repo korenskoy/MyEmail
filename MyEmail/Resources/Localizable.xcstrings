@@ -2062,6 +2062,16 @@
         }
       }
     },
+    "No signature": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Без подписи"
+          }
+        }
+      }
+    },
     "None": {
       "extractionState": "manual",
       "localizations": {
@@ -3048,6 +3058,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Войти через Google (OAuth)"
+          }
+        }
+      }
+    },
+    "Signature": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подпись"
           }
         }
       }

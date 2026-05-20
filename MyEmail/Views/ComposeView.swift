@@ -71,7 +71,27 @@ struct ComposeWindowContent: View {
             return appState.accounts.first { $0.id == aid }
                 ?? appState.accounts.first
         }
+        // New message / mailto: pick the account of the current selection so
+        // From matches what the user sees in the sidebar/list.
+        if let aid = selectionAccountID(),
+           let account = appState.accounts.first(where: { $0.id == aid }) {
+            return account
+        }
         return appState.accounts.first
+    }
+
+    /// Resolve the "currently visible" account from selection state.
+    /// Priority: selected message → selected folder → none.
+    private func selectionAccountID() -> UUID? {
+        if let mid = appState.selectedMessageID {
+            let pool = appState.isSearchActive
+                ? appState.searchResults
+                : appState.messageItems
+            if let item = pool.first(where: { $0.id == mid }) {
+                return item.accountID
+            }
+        }
+        return appState.selectedFolder?.accountID
     }
 }
 
@@ -106,6 +126,8 @@ struct ComposeView: View {
     @State var isDirty = false
     @State var attachments: [ComposeAttachment] = []
     @State var isDropTargeted = false
+    @State var availableSignatures: [Signature] = []
+    @State var selectedSignatureID: UUID?
 
     init(mode: ComposeMode, message: Message?, account: Account, onDismiss: @escaping () -> Void) {
         self.mode = mode
@@ -155,16 +177,26 @@ struct ComposeView: View {
         .frame(minWidth: 560, minHeight: 400)
         .overlay(dropOverlay)
         .onDrop(of: [.fileURL], isTargeted: $isDropTargeted, perform: handleDrop)
-        .onAppear { prefill(); applySignature(for: selectedAccountID) }
+        .onAppear {
+            prefill()
+            reloadSignatures()
+            selectedSignatureID = availableSignatures.first(where: \.isDefault)?.id
+            applySelectedSignature()
+        }
         .task { await draftAutosaveLoop() }
         .onDisappear { env.draftRecovery.remove(windowID: recoveryID) }
         .onChange(of: toField) { _, _ in isDirty = true }
         .onChange(of: ccField) { _, _ in isDirty = true }
         .onChange(of: subjectField) { _, _ in isDirty = true }
         .onChange(of: attributedBody.string) { _, _ in isDirty = true }
-        .onChange(of: selectedAccountID) { old, new in
+        .onChange(of: selectedAccountID) { _, _ in
             isDirty = true
-            swapSignature(from: old, to: new)
+            reloadSignatures()
+            selectedSignatureID = availableSignatures.first(where: \.isDefault)?.id
+            applySelectedSignature()
+        }
+        .onChange(of: selectedSignatureID) { _, _ in
+            applySelectedSignature()
         }
     }
 
@@ -180,6 +212,7 @@ struct ComposeView: View {
             }
             .buttonStyle(.borderless)
             .help(String(localized: "Attach files"))
+            signatureMenu
             if let errorMessage {
                 Text(errorMessage)
                     .font(.caption)
@@ -210,6 +243,30 @@ struct ComposeView: View {
                isPresented: $showPlainConfirmAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Switch", role: .destructive) { convertToPlain() }
+        }
+    }
+
+    /// Signature picker — Menu with an inline Picker so the row shows a
+    /// checkmark next to the active entry. Hidden when the From account has
+    /// no signatures configured.
+    @ViewBuilder
+    private var signatureMenu: some View {
+        if !availableSignatures.isEmpty {
+            Menu {
+                Picker(String(localized: "Signature"), selection: $selectedSignatureID) {
+                    Text(String(localized: "No signature")).tag(UUID?.none)
+                    ForEach(availableSignatures) { sig in
+                        Text(sig.name).tag(UUID?.some(sig.id))
+                    }
+                }
+                .pickerStyle(.inline)
+            } label: {
+                Image(systemName: "signature")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help(String(localized: "Signature"))
         }
     }
 

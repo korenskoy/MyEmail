@@ -16,16 +16,6 @@ extension ComposeView {
 
     static let signatureSeparator = "\n\n-- \n"
 
-    /// Fetch default signature for an account from GRDB.
-    func defaultSignature(for accountID: UUID) -> Signature? {
-        try? DatabaseService.shared.pool.read { db in
-            try Signature
-                .filter(Column("account_id") == accountID)
-                .filter(Column("is_default") == true)
-                .fetchOne(db)
-        }
-    }
-
     /// Attributes used to tag the signature range so swap can locate it
     /// independently of its visible text (survives user edits around it).
     private func signatureAttributes() -> [NSAttributedString.Key: Any] {
@@ -34,28 +24,34 @@ extension ComposeView {
         return attrs
     }
 
-    /// Append default signature on initial appear.
-    func applySignature(for accountID: UUID) {
-        guard let sig = defaultSignature(for: accountID) else { return }
-        let sigString = Self.signatureSeparator + sig.body
-        let sigAttr = NSAttributedString(string: sigString, attributes: signatureAttributes())
-        let merged = NSMutableAttributedString(attributedString: attributedBody)
-        merged.append(sigAttr)
-        attributedBody = merged
+    /// Refresh signatures available for the current From account.
+    func reloadSignatures() {
+        let accountID = selectedAccountID
+        availableSignatures = (try? DatabaseService.shared.pool.read { db in
+            try Signature
+                .filter(Column("account_id") == accountID)
+                .order(Column("name"))
+                .fetchAll(db)
+        }) ?? []
     }
 
-    /// Swap signature when user changes the From account. Located via the
-    /// `signatureKey` attribute marker rather than a suffix match — resilient
-    /// to rich formatting. The new signature is always appended at the end;
-    /// if the user moved the previous one mid-body it is relocated.
-    func swapSignature(from oldAccountID: UUID, to newAccountID: UUID) {
+    /// Apply whichever signature `selectedSignatureID` currently points at
+    /// (or remove any existing signature when nil).
+    func applySelectedSignature() {
+        let signature = availableSignatures.first { $0.id == selectedSignatureID }
+        setSignature(to: signature)
+    }
+
+    /// Replace any existing signature in the body with `signature` (or remove
+    /// when nil). Located via the `signatureKey` attribute marker — resilient
+    /// to rich formatting and user edits around it.
+    func setSignature(to signature: Signature?) {
         let merged = NSMutableAttributedString(attributedString: attributedBody)
-        let ranges = signatureRanges(in: merged)
-        for range in ranges.reversed() {
+        for range in signatureRanges(in: merged).reversed() {
             merged.deleteCharacters(in: range)
         }
-        if let newSig = defaultSignature(for: newAccountID) {
-            let sigString = Self.signatureSeparator + newSig.body
+        if let signature {
+            let sigString = Self.signatureSeparator + signature.body
             merged.append(NSAttributedString(string: sigString, attributes: signatureAttributes()))
         }
         attributedBody = merged
