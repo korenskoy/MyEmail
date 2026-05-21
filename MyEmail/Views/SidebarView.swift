@@ -36,7 +36,7 @@ struct SidebarView: View {
                 Section(isExpanded: accountExpandedBinding(for: entry.account.id)) {
                     folderNodes(entry.tree)
                 } header: {
-                    Text(entry.account.name)
+                    accountHeader(for: entry.account)
                 }
             }
         }
@@ -168,6 +168,29 @@ struct SidebarView: View {
         appState.folders
             .filter { $0.specialUse == .inbox }
             .reduce(0) { $0 + $1.unreadCount }
+    }
+
+    /// Aggregate unread for an account's inbox — surfaced in the section
+    /// header only when the account is collapsed (otherwise the Inbox row
+    /// itself shows the same number).
+    private func inboxUnreadCount(for accountID: UUID) -> Int {
+        appState.folders
+            .filter { $0.accountID == accountID && $0.specialUse == .inbox }
+            .reduce(0) { $0 + $1.unreadCount }
+    }
+
+    @ViewBuilder
+    private func accountHeader(for account: Account) -> some View {
+        HStack {
+            Text(account.name)
+            Spacer()
+            if collapsedAccountIDs.contains(account.id) {
+                let count = inboxUnreadCount(for: account.id)
+                if count > 0 {
+                    UnreadBadge(count: count)
+                }
+            }
+        }
     }
 
     // MARK: - Context menu (DESIGN.md §4.3)
