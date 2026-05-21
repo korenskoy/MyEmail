@@ -152,11 +152,21 @@ final class AppState {
         switch item {
         case .unifiedInbox:
             selectedFolder = nil
-            observeMessages(whereClause: """
-                JOIN folders f ON f.id = m.folder_id
-                JOIN accounts a ON a.id = m.account_id
-                WHERE f.special_use = 'inbox' AND a.is_enabled = 1
-                """)
+            // IN-subquery (vs JOIN) lets SQLite walk `messages_folder_date`
+            // per resolved inbox folder_id instead of scanning the full
+            // `messages` table (degraded badly once Archive/All Mail grew
+            // past tens of thousands of rows). LIMIT 500 caps the initial
+            // synchronous fetch on MainActor — visually we never show more.
+            observeMessages(
+                whereClause: """
+                WHERE m.folder_id IN (
+                    SELECT f.id FROM folders f
+                    JOIN accounts a ON a.id = f.account_id
+                    WHERE f.special_use = 'inbox' AND a.is_enabled = 1
+                )
+                """,
+                limit: 500
+            )
 
         case .folder(let id):
             selectedFolder = folders.first { $0.id == id }
@@ -180,15 +190,22 @@ final class AppState {
 
     private func observeMessages(
         whereClause: String,
-        arguments: StatementArguments = StatementArguments()
+        arguments: StatementArguments = StatementArguments(),
+        limit: Int? = nil
     ) {
-        // Eager model: no LIMIT — projection + NSTableView keep memory bounded.
-        let sql = """
+        // Eager model: per-folder queries hit `messages_folder_date` and stay
+        // fast even on huge folders — projection + NSTableView keep memory
+        // bounded. Cross-folder views (Unified Inbox) pass an explicit `limit`
+        // because the initial fetch runs synchronously on MainActor.
+        var sql = """
             SELECT \(Self.messageListColumns)
             FROM messages m
             \(whereClause)
             ORDER BY m.date DESC
             """
+        if let limit {
+            sql += "\nLIMIT \(limit)"
+        }
 
         LogService.log(.debug, .db, "Observing messages", detail: whereClause.prefix(60).description)
 

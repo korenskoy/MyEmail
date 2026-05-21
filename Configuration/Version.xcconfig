@@ -3,4 +3,4 @@
 // CURRENT_PROJECT_VERSION — build number (CFBundleVersion). Auto-incremented by scripts/build-dmg.sh.
 
 MARKETING_VERSION = 2.2.1
-CURRENT_PROJECT_VERSION = 185
+CURRENT_PROJECT_VERSION = 187
