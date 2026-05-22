@@ -110,6 +110,16 @@ extension SyncService {
             }
         }
 
+        return try await persistFullMessageBody(rawData: rawData, msg: msg, account: account)
+    }
+
+    /// Parse + persist a fetched RFC822 body. Shared by the single-message
+    /// detail-view path (`_loadFullMessageLocked`) and the batched prefetch
+    /// path (`runPrefetchLoop` via pipelined `fetchRawMessages`).
+    func persistFullMessageBody(
+        rawData: Data, msg: Message, account: Account
+    ) async throws -> Message {
+        var msg = msg
         let email: EmailMessage
         do {
             email = try EmailMessage(data: rawData)
@@ -129,6 +139,8 @@ extension SyncService {
         // Detect PGP/GPG encryption (PGP/MIME or inline PGP)
         let pgpEncrypted = email.isEncrypted
             || (textBody ?? "").contains("-----BEGIN PGP MESSAGE-----")
+
+        let id = msg.id
 
         if pgpEncrypted {
             try await pool.write { db in

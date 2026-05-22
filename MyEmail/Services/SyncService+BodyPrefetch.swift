@@ -95,6 +95,12 @@ extension SyncService {
 
     // MARK: - Loop
 
+    /// Batch size for pipelined raw-body fetches. Tuned for Gmail (~150 ms RTT):
+    /// 10 messages per round-trip empties most inbox prefetch sets in 1-2 RTTs
+    /// total instead of 10-30. Thunderbird's `nsImapProtocol::FetchMessage`
+    /// uses a comma-list UID set in one command — same end effect.
+    private static let prefetchBatchSize = 10
+
     private func runPrefetchLoop(folderID: UUID) async {
         // Combined scope + auth gate: read folder.special_use AND account.auth_state
         // in a single query to avoid prefetch hammering on needsReauth accounts.
@@ -135,63 +141,140 @@ extension SyncService {
             return
         }
 
-        LogService.log(.info, .sync, "Prefetch start",
-                       detail: "folder=\(folderID) count=\(candidateIDs.count)")
-
-        var fetched = 0
-        var skipped = 0
-        var consecutiveFailures = 0
-        for messageID in candidateIDs {
-            if Task.isCancelled {
-                LogService.log(.debug, .sync, "Prefetch cancelled",
-                               detail: "fetched=\(fetched) remaining=\(candidateIDs.count - fetched - skipped)")
-                return
-            }
-
-            // Yield once between iterations so a click for another message can
-            // claim the command-socket tail before we enqueue the next UID.
-            await Task.yield()
-
-            // `loadFullMessage` may swallow auth/transport errors and return
-            // the unchanged message (downloadState != .full). Detect that via
-            // post-condition rather than relying on a thrown error.
-            let result: Message?
-            do {
-                result = try await loadFullMessage(id: messageID)
-            } catch {
-                if SyncService.isAuthError(error) {
-                    LogService.log(.warning, .sync, "Prefetch aborted (auth error)",
-                                   detail: "fetched=\(fetched) folder=\(folderID)")
-                    return
-                }
-                skipped += 1
-                consecutiveFailures += 1
-                if consecutiveFailures >= 3 {
-                    LogService.log(.warning, .sync, "Prefetch aborted (3 consecutive failures)",
-                                   detail: "fetched=\(fetched) folder=\(folderID)")
-                    return
-                }
-                LogService.log(.debug, .sync, "Prefetch skip",
-                               detail: "id=\(messageID) error=\(error)")
-                continue
-            }
-            if result?.downloadState == .full {
-                fetched += 1
-                consecutiveFailures = 0
-            } else {
-                skipped += 1
-                consecutiveFailures += 1
-                if consecutiveFailures >= 3 {
-                    LogService.log(.warning, .sync,
-                                   "Prefetch aborted (3 consecutive non-full results)",
-                                   detail: "fetched=\(fetched) folder=\(folderID)")
-                    return
-                }
-            }
+        // One DB read pulls every (message, folder, account) tuple — avoids
+        // N round-trips through `fetchMessageContext` in the inner loop.
+        let candidates: [(msg: Message, folder: Folder, account: Account)]
+        do {
+            candidates = try await loadPrefetchContexts(messageIDs: candidateIDs)
+        } catch {
+            LogService.log(.warning, .sync, "Prefetch context query failed",
+                           detail: "\(error)")
+            return
         }
+        guard let firstCandidate = candidates.first else { return }
+        let folder = firstCandidate.folder
+        let account = firstCandidate.account
+
+        LogService.log(.info, .sync, "Prefetch start",
+                       detail: "folder=\(folderID) count=\(candidates.count)")
+
+        let (fetched, skipped): (Int, Int) = (try? await runCommandSerializedPerAccount(account.id) { [weak self] in
+            guard let self else { return (0, 0) }
+            return await self._prefetchBatchedLocked(
+                candidates: candidates, folder: folder, account: account
+            )
+        }) ?? (0, 0)
 
         LogService.log(.info, .sync, "Prefetch done",
                        detail: "folder=\(folderID) fetched=\(fetched) skipped=\(skipped)")
+    }
+
+    /// The batched fetch+persist body. Runs under the per-account command lock.
+    /// Returns (fetched, skipped) counts.
+    private func _prefetchBatchedLocked(
+        candidates: [(msg: Message, folder: Folder, account: Account)],
+        folder: Folder, account: Account
+    ) async -> (Int, Int) {
+        let imap = getOrCreateCommandIMAPService(for: account)
+        await wireTokenProvider(for: account, imap: imap)
+
+        do {
+            if await !imap.isConnected { try await imap.connect() }
+            try await imap.ensureFolderSelected(folder.path)
+        } catch {
+            if SyncService.isAuthError(error), account.authType == .oauth2 {
+                markNeedsReauth(accountID: account.id, reason: "prefetch auth failure")
+            }
+            LogService.log(.warning, .sync, "Prefetch connect/select failed",
+                           detail: "\(error)")
+            return (0, candidates.count)
+        }
+
+        var fetched = 0
+        var skipped = 0
+        var consecutiveFailedBatches = 0
+        let batchSize = Self.prefetchBatchSize
+
+        for batchStart in stride(from: 0, to: candidates.count, by: batchSize) {
+            if Task.isCancelled {
+                LogService.log(.debug, .sync, "Prefetch cancelled",
+                               detail: "fetched=\(fetched) remaining=\(candidates.count - fetched - skipped)")
+                return (fetched, skipped)
+            }
+            await Task.yield()
+
+            let batchEnd = min(batchStart + batchSize, candidates.count)
+            let batch = Array(candidates[batchStart..<batchEnd])
+            let uids = batch.map(\.msg.uid)
+
+            let rawByUID: [UInt32: Data]
+            do {
+                rawByUID = try await imap.fetchRawMessages(uids: uids)
+            } catch {
+                if SyncService.isAuthError(error) {
+                    LogService.log(.warning, .sync, "Prefetch aborted (auth error)",
+                                   detail: "fetched=\(fetched)")
+                    return (fetched, skipped + batch.count)
+                }
+                await recycleConnectionIfDesynced(error, imap: imap)
+                skipped += batch.count
+                consecutiveFailedBatches += 1
+                if consecutiveFailedBatches >= 3 {
+                    LogService.log(.warning, .sync,
+                                   "Prefetch aborted (3 consecutive batch failures)",
+                                   detail: "fetched=\(fetched)")
+                    return (fetched, skipped)
+                }
+                LogService.log(.debug, .sync, "Prefetch batch failed",
+                               detail: "size=\(batch.count) error=\(error)")
+                continue
+            }
+            consecutiveFailedBatches = 0
+
+            for candidate in batch {
+                guard let raw = rawByUID[candidate.msg.uid] else {
+                    skipped += 1
+                    continue
+                }
+                do {
+                    let persisted = try await persistFullMessageBody(
+                        rawData: raw, msg: candidate.msg, account: account
+                    )
+                    if persisted.downloadState == .full {
+                        fetched += 1
+                    } else {
+                        skipped += 1
+                    }
+                } catch {
+                    skipped += 1
+                    LogService.log(.debug, .sync, "Prefetch persist failed",
+                                   detail: "id=\(candidate.msg.id) error=\(error)")
+                }
+            }
+        }
+        return (fetched, skipped)
+    }
+
+    /// Single GRDB read pulling msg + folder + account for every candidate.
+    /// All candidates are guaranteed to share the same folder (caller filters
+    /// by folder_id), so we look up folder/account once and zip against msgs.
+    private func loadPrefetchContexts(
+        messageIDs: [UUID]
+    ) async throws -> [(msg: Message, folder: Folder, account: Account)] {
+        guard !messageIDs.isEmpty else { return [] }
+        return try await pool.read { db -> [(Message, Folder, Account)] in
+            let messages = try Message
+                .filter(messageIDs.contains(Column("id")))
+                .fetchAll(db)
+            // Preserve caller's date-DESC ordering.
+            let byID = Dictionary(uniqueKeysWithValues: messages.map { ($0.id, $0) })
+            let ordered = messageIDs.compactMap { byID[$0] }
+            guard let head = ordered.first,
+                  let folder = try Folder.fetchOne(db, key: head.folderID),
+                  let account = try Account.fetchOne(db, key: head.accountID)
+            else { return [] }
+            return ordered.map { ($0, folder, account) }
+        }
     }
 
     // MARK: - Scope + auth gate
