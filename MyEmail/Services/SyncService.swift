@@ -276,8 +276,6 @@ final class SyncService {
             LogService.log(.debug, .sync, "Folder sync already in progress", detail: "\(folderID)")
             return
         }
-        syncingFolders.insert(folderID)
-        defer { syncingFolders.remove(folderID) }
 
         let folder: Folder? = try? await pool.read { db in
             try Folder.fetchOne(db, key: folderID)
@@ -294,6 +292,19 @@ final class SyncService {
             LogService.log(.warning, .sync, "syncFolderIfNeeded: account not found", detail: folder.path)
             return
         }
+
+        // INBOX is always synced as part of `syncAccount` — if one is already
+        // in flight, await it instead of issuing a redundant SELECT/CONDSTORE
+        // pass behind the per-account serial lock (cross-entry coalescing,
+        // Thunderbird's `LoadNextQueuedUrl` URL dedup parity).
+        if folder.specialUse == .inbox, let runningTask = runningSyncs[account.id] {
+            LogService.log(.debug, .sync, "INBOX sync folded into running account sync", detail: folder.path)
+            _ = await runningTask.value
+            return
+        }
+
+        syncingFolders.insert(folderID)
+        defer { syncingFolders.remove(folderID) }
 
         LogService.log(.info, .sync, "Syncing folder on select", detail: folder.path)
 

@@ -337,12 +337,18 @@ extension SyncService {
             + deltaNewUIDs.subtracting(localUIDs).count
             - pendingDeleteCount
         var phantomUIDs: Set<UInt32> = []
-        if serverCount != expectedCount {
+        // Same shape as the CONDSTORE ghost-recheck below: only meaningful
+        // when the server has FEWER live messages than we expect. A larger
+        // serverCount is an unbackfilled gap, not phantoms.
+        let liveLocalCandidates = localUIDs.union(deltaNewUIDs).subtracting(ghostUIDs)
+        if serverCount < expectedCount,
+           let minLocal = liveLocalCandidates.min(),
+           let maxLocal = liveLocalCandidates.max() {
             LogService.log(.info, .sync, "sync path: qresync phantom-recheck",
-                detail: "\(folderPath): expected=\(expectedCount) server=\(serverCount)")
+                detail: "\(folderPath): expected=\(expectedCount) server=\(serverCount) range=\(minLocal)…\(maxLocal)")
             let entries: [(uid: UInt32, flags: [Flag], modSeq: UInt64?)]
             do {
-                entries = try await imap.fetchAllFlags()
+                entries = try await imap.fetchAllFlags(uidRange: minLocal...maxLocal)
             } catch {
                 Self.dumpParserErrorBuffer(error, context: "qresync phantom-recheck")
                 throw error
@@ -352,8 +358,7 @@ extension SyncService {
             for entry in entries where !entry.flags.contains(.deleted) {
                 serverUIDs.insert(entry.uid)
             }
-            let liveLocal = localUIDs.union(deltaNewUIDs).subtracting(ghostUIDs)
-            phantomUIDs = liveLocal.subtracting(serverUIDs).subtracting(pendingSourceUIDs)
+            phantomUIDs = liveLocalCandidates.subtracting(serverUIDs).subtracting(pendingSourceUIDs)
             if !phantomUIDs.isEmpty {
                 let phantoms = phantomUIDs
                 try await pool.write { db in
@@ -449,6 +454,7 @@ extension SyncService {
             LogService.log(.warning, .sync,
                 "CONDSTORE delta fetch failed, falling back to legacy",
                 detail: "\(folderPath): \(error)")
+            await recycleConnectionIfDesynced(error, imap: imap)
             // Fall back to legacy — keep current watermark; don't regress.
             try await legacyIncrementalSync(
                 account: account, folderID: folderID, folderPath: folderPath,
@@ -492,16 +498,27 @@ extension SyncService {
         let expectedCount = localUIDs.count + newUIDs.count - pendingDeleteCount
 
         var ghostUIDs: Set<UInt32> = []
-        if serverCount != expectedCount {
+        // Ghost-recheck only makes sense when the server has FEWER live messages
+        // than we expect locally — that's the signal that some of our UIDs were
+        // expunged. `serverCount > expectedCount` is just an incomplete backfill
+        // (Gmail All Mail 135k server vs 29k local): the backfill loop below
+        // will close that gap; enumerating live UIDs would be wasted bandwidth.
+        // Even when warranted, bound the FETCH to the local UID window —
+        // UIDs above maxLocal can't be ghosts (we don't have them), UIDs below
+        // minLocal weren't backfilled yet either. Thunderbird's parity is
+        // `UID FETCH 1:* (FLAGS) (CHANGEDSINCE <modseq>)`
+        // (`nsImapProtocol::ProcessMailboxUpdate`, nsImapProtocol.cpp:4258-4271);
+        // we can't use CHANGEDSINCE here because we need every live UID, not
+        // just changed ones — bounding by min/max localUID is the equivalent
+        // bandwidth saving.
+        if serverCount < expectedCount,
+           let minLocalUID = localUIDs.min(),
+           let maxLocalUID = localUIDs.max() {
             LogService.log(.info, .sync, "sync path: ghost-recheck",
-                detail: "\(folderPath): expected=\(expectedCount) server=\(serverCount)")
-            // Thunderbird parity: `UID FETCH 1:* (UID FLAGS)` — see
-            // `nsImapProtocol::ProcessMailboxUpdate` (nsImapProtocol.cpp:4259).
-            // Per-message FETCH responses never hit the 8 KB IMAP line limit
-            // that trips `UID SEARCH` on 100k+ folders.
+                detail: "\(folderPath): expected=\(expectedCount) server=\(serverCount) range=\(minLocalUID)…\(maxLocalUID)")
             let entries: [(uid: UInt32, flags: [Flag], modSeq: UInt64?)]
             do {
-                entries = try await imap.fetchAllFlags()
+                entries = try await imap.fetchAllFlags(uidRange: minLocalUID...maxLocalUID)
             } catch {
                 Self.dumpParserErrorBuffer(error, context: "ghost-recheck")
                 throw error
@@ -881,6 +898,7 @@ extension SyncService {
             LogService.log(.warning, .sync,
                 "Backfill FETCH 1:\(upper) failed",
                 detail: "\(folderPath): \(error)")
+            await recycleConnectionIfDesynced(error, imap: imap)
             return []
         }
 

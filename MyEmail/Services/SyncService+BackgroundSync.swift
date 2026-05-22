@@ -157,6 +157,7 @@ extension SyncService {
         } catch {
             LogService.log(.debug, .sync,
                 "STATUS failed for \(folder.path)", detail: "\(error)")
+            await recycleConnectionIfDesynced(error, imap: imap)
             return
         }
 
@@ -227,6 +228,7 @@ extension SyncService {
                 } catch {
                     LogService.log(.warning, .sync,
                         "Incremental sync after STATUS failed", detail: "\(error)")
+                    await self.recycleConnectionIfDesynced(error, imap: imap)
                 }
             }
         }

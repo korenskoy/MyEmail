@@ -35,6 +35,10 @@ actor IMAPService {
     /// on the next command, even if `lastActivityAt` looks fresh.
     private(set) var needsHealthProbe: Bool = false
 
+    /// In-flight `connect()` task. Concurrent callers await it instead of
+    /// constructing a parallel IMAPServer + socket that would orphan one.
+    private var connectInFlight: Task<Void, Error>?
+
     /// NOOP probe timeout — TB short-fail policy. Anything slower is treated
     /// as a dead socket.
     private static let probeTimeout: TimeInterval = 5
@@ -62,6 +66,33 @@ actor IMAPService {
     }
 
     func connect() async throws {
+        // Live-session early-return: a fully authenticated session already
+        // exists, nothing to do.
+        if let existing = server, await existing.isConnected {
+            LogService.log(.debug, .imap,
+                "connect() on live session — skipping", detail: account.email)
+            return
+        }
+
+        // Cold-start coalescing: the 14+ `if await !imap.isConnected { try
+        // await imap.connect() }` call sites are non-atomic across actor
+        // reentrancy — concurrent callers can both see `server == nil` and
+        // race into building parallel sockets, orphaning one. Mirror the
+        // `runningSyncs` pattern: route every concurrent caller through the
+        // same in-flight Task.
+        if let inFlight = connectInFlight {
+            try await inFlight.value
+            return
+        }
+
+        let task = Task { try await self.connectBody() }
+        connectInFlight = task
+        defer { connectInFlight = nil }
+        try await task.value
+    }
+
+    /// Real connect body — only invoked through `connect()`'s coalescing gate.
+    private func connectBody() async throws {
         // Clear stale SELECT state from prior connection
         self.lastSelection = nil
         self.selectedFolderPath = nil
@@ -86,7 +117,22 @@ actor IMAPService {
             } else {
                 token = try keychain.oauthAccessToken(for: account.id)
             }
-            try await srv.authenticateXOAUTH2(email: email, accessToken: token)
+
+            // Gmail occasionally returns a greeting whose CAPABILITY list is
+            // truncated or missing AUTH=XOAUTH2 (rate-limit / region failover).
+            // Thunderbird's `nsImapProtocol::ProcessAfterAuthenticated` re-issues
+            // CAPABILITY in exactly this case — match that: refetch once and
+            // retry, otherwise the error surfaces as a confusing
+            // "XOAUTH2 not advertised" against a server that supports it.
+            do {
+                try await srv.authenticateXOAUTH2(email: email, accessToken: token)
+            } catch IMAPError.unsupportedAuthMechanism {
+                LogService.log(.warning, .imap,
+                    "XOAUTH2 missing from initial capability set — refetching",
+                    detail: account.email)
+                _ = try await srv.fetchCapabilities()
+                try await srv.authenticateXOAUTH2(email: email, accessToken: token)
+            }
 
             // MUST be set AFTER authenticateXOAUTH2: that call overwrites
             // SwiftMail's stored `authentication` with a static closure
@@ -376,6 +422,24 @@ actor IMAPService {
     ) async throws -> [UID: [(section: Section, data: Data)]] {
         let srv = try await requireServer()
         return try await srv.fetchPartsPipelined(parts: parts)
+    }
+
+    /// Pipelined fetch of full RFC822 bodies for multiple UIDs — one RTT for
+    /// the command burst instead of N. Thunderbird `FetchMessage` parity for
+    /// body prefetch (nsImapProtocol.cpp). Returns map keyed by UInt32 UID;
+    /// UIDs missing from the result map failed individually and should be
+    /// retried by the caller (typically via single-UID `fetchRawMessage`).
+    func fetchRawMessages(uids: [UInt32]) async throws -> [UInt32: Data] {
+        guard !uids.isEmpty else { return [:] }
+        let srv = try await requireServer()
+        let typed = uids.map(UID.init)
+        let raw = try await srv.fetchRawMessagesPipelined(uids: typed)
+        var out: [UInt32: Data] = [:]
+        out.reserveCapacity(raw.count)
+        for (uid, data) in raw {
+            out[uid.value] = data
+        }
+        return out
     }
 
     /// Fetch headers for a specific set of UIDs (non-contiguous).
