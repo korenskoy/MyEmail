@@ -351,7 +351,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Архив"
+            "value": "Архивировать"
           }
         }
       }
@@ -362,7 +362,13 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Папка архива"
+            "value": "Архив"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archive"
           }
         }
       }
@@ -738,12 +744,6 @@
     "Copy": {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copy"
-          }
-        },
         "ru": {
           "stringUnit": {
             "state": "translated",
@@ -1094,7 +1094,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Пометить"
+            "value": "Поставить флажок"
           }
         }
       }
@@ -1763,7 +1763,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Пометить как прочитанное"
+            "value": "Отметить как прочитанное"
           }
         }
       }
@@ -1783,7 +1783,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Пометить как непрочитанное"
+            "value": "Отметить как непрочитанное"
           }
         }
       }
@@ -3430,7 +3430,7 @@
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Снять отметку"
+            "value": "Снять флажок"
           }
         }
       }
@@ -3490,16 +3490,10 @@
     "View Source": {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "View Source"
-          }
-        },
         "ru": {
           "stringUnit": {
             "state": "translated",
-            "value": "Исходный код"
+            "value": "Показать исходный код"
           }
         }
       }

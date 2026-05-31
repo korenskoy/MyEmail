@@ -30,31 +30,42 @@ struct MessageListTable: View {
     @State private var expandedThreadIDs: Set<UUID> = []
     @State private var sourceSheet: SourceSheet?
 
-    // Threading cache: recomputed only when structural inputs change
-    // (count / first-last id / isThreaded / expanded set). Cell-level
-    // updates (size, flags, read state) reuse cached order.
+    // Display-order cache: recomputed only when structural inputs change
+    // (count / first-last id / isThreaded / expanded set / sort). Cell-level
+    // updates (size, flags, read state) reuse the cached order — the byID
+    // lookup in `body` resolves to whichever live MessageListItem just
+    // arrived from the observation, so flag/read flips render immediately.
+    //
+    // Materializing the sort here (instead of in body) is what removes the
+    // per-render hit on huge folders: threading + sorting 135k UIDs is
+    // ~80 ms work which used to happen every body render.
     @State private var cachedOrder: [UUID] = []
     @State private var cachedCounts: [UUID: Int] = [:]
-    @State private var cachedSignature: ThreadingSignature = .empty
+    @State private var cachedSignature: DisplaySignature = .empty
 
-    private struct ThreadingSignature: Equatable {
+    private struct DisplaySignature: Equatable {
         let count: Int
         let firstID: UUID?
         let lastID: UUID?
         let isThreaded: Bool
         let expanded: Set<UUID>
-        static let empty = ThreadingSignature(
-            count: -1, firstID: nil, lastID: nil, isThreaded: false, expanded: []
+        let sortColumn: MessageSort.Column
+        let sortAscending: Bool
+        static let empty = DisplaySignature(
+            count: -1, firstID: nil, lastID: nil, isThreaded: false, expanded: [],
+            sortColumn: .date, sortAscending: false
         )
     }
 
-    private var currentSignature: ThreadingSignature {
-        ThreadingSignature(
+    private var currentSignature: DisplaySignature {
+        DisplaySignature(
             count: items.count,
             firstID: items.first?.id,
             lastID: items.last?.id,
             isThreaded: appState.isThreaded,
-            expanded: expandedThreadIDs
+            expanded: expandedThreadIDs,
+            sortColumn: appState.messageSort.column,
+            sortAscending: appState.messageSort.order.ascending
         )
     }
 
@@ -68,50 +79,54 @@ struct MessageListTable: View {
         }
     }
 
-    private func recomputeThreading() {
-        guard appState.isThreaded else {
-            cachedOrder = items.map(\.id)
-            cachedCounts = [:]
-            cachedSignature = currentSignature
-            return
-        }
-        let groups = ThreadingService.group(items)
-        var order: [UUID] = []
-        var counts: [UUID: Int] = [:]
-        for group in groups {
-            if group.count == 1 {
-                order.append(group.latest.id)
-            } else {
-                counts[group.latest.id] = group.count
-                if expandedThreadIDs.contains(group.id) {
-                    order.append(contentsOf: group.messages.map(\.id))
-                } else {
-                    order.append(group.latest.id)
-                }
-            }
-        }
-        cachedOrder = order
-        cachedCounts = counts
-        cachedSignature = currentSignature
-    }
-
     private var itemByID: [UUID: MessageListItem] {
         Dictionary(items.lazy.map { ($0.id, $0) }, uniquingKeysWith: { _, b in b })
     }
 
-    var body: some View {
-        let byID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
-        let threadedOrder = cachedOrder.compactMap { byID[$0] }
-        // Sort always runs post-threading on the flat display list. This
-        // keeps the order consistent with the header indicator (incl. the
-        // default date-DESC case, which otherwise exposes expanded-thread
-        // children ordered date-ASC inside their group).
-        // Trade-off: in threaded mode with non-date sort, children may
-        // interleave with unrelated rows — disable threading for strict
-        // column sort.
-        let displayItems = threadedOrder.sorted(
+    private func recomputeDisplayOrder() {
+        // Step 1: threading collapse → flat UUID order.
+        let threadedItems: [MessageListItem]
+        if appState.isThreaded {
+            let groups = ThreadingService.group(items)
+            var collected: [MessageListItem] = []
+            collected.reserveCapacity(items.count)
+            var counts: [UUID: Int] = [:]
+            for group in groups {
+                if group.count == 1 {
+                    collected.append(group.latest)
+                } else {
+                    counts[group.latest.id] = group.count
+                    if expandedThreadIDs.contains(group.id) {
+                        collected.append(contentsOf: group.messages)
+                    } else {
+                        collected.append(group.latest)
+                    }
+                }
+            }
+            threadedItems = collected
+            cachedCounts = counts
+        } else {
+            threadedItems = items
+            cachedCounts = [:]
+        }
+        // Step 2: sort once here (was previously per-body render — the hot
+        // path on 135k-row folders). Trade-off: in threaded mode with a
+        // non-date sort, expanded-thread children may interleave with
+        // unrelated rows — same as before, just materialized once.
+        let sorted = threadedItems.sorted(
             by: appState.messageSort, isSentOrDrafts: isSentOrDrafts
         )
+        cachedOrder = sorted.map(\.id)
+        cachedSignature = currentSignature
+    }
+
+    var body: some View {
+        // Resolve UUIDs through a fresh byID lookup so flag/read updates
+        // that arrive in `items` without changing the structural signature
+        // still render immediately. The Dictionary build is O(N) but cheap
+        // compared to the old per-render threading + sort.
+        let byID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+        let displayItems = cachedOrder.compactMap { byID[$0] }
         let threadCounts = cachedCounts
 
         return MessageListNSTable(
@@ -158,9 +173,9 @@ struct MessageListTable: View {
             RawSourceView(source: sheet.source, onDismiss: { sourceSheet = nil })
         }
         .onAppear {
-            if cachedSignature != currentSignature { recomputeThreading() }
+            if cachedSignature != currentSignature { recomputeDisplayOrder() }
         }
-        .onChange(of: currentSignature) { _, _ in recomputeThreading() }
+        .onChange(of: currentSignature) { _, _ in recomputeDisplayOrder() }
     }
 
     private func openMessageWindow(_ id: UUID) {

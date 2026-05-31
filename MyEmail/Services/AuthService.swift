@@ -27,6 +27,10 @@ enum AuthError: Error, Sendable {
 enum AuthConstants {
     /// Refresh token if it expires within this many seconds (§9.9).
     static let tokenRefreshThreshold: TimeInterval = 300 // 5 min
+    /// Minimum interval between two refresh attempts for a single account.
+    /// Prevents refresh-token rotation flood that would make Google
+    /// invalidate the grant (hard rule 15).
+    static let minRefreshInterval: TimeInterval = 30
 }
 
 // MARK: - AuthService
@@ -38,6 +42,11 @@ actor AuthService {
 
     /// Per-account coalescing lock: concurrent callers await the same refresh Task.
     var refreshTasks: [UUID: Task<Void, Error>] = [:]
+
+    /// Last successful refresh timestamp per account — enforces cooldown
+    /// so concurrent callers cannot flood Google's refresh endpoint and
+    /// cause refresh-token rotation to invalidate the grant.
+    var lastRefreshAt: [UUID: Date] = [:]
 
     var sweepTask: Task<Void, Never>?
 

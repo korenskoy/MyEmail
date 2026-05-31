@@ -10,26 +10,49 @@ import Foundation
 
 extension AuthService {
 
-    // MARK: - Refresh with coalescing lock (§6.1, §9.9)
+    // MARK: - Refresh with coalescing lock (§6.1, §9.9, hard rule 15)
 
     /// Refresh access token. Concurrent callers for the same account
     /// await the same in-flight Task instead of firing duplicate requests.
-    func refresh(accountID: UUID) async throws {
-        // If refresh already in progress, await the existing task
+    /// Sequential callers are gated by a 30-second cooldown — Google rotates
+    /// the refresh-token on every refresh and invalidates the grant if
+    /// rotations come too fast.
+    ///
+    /// `reason` is logged so flood sources can be diagnosed.
+    func refresh(accountID: UUID, reason: String = "explicit") async throws {
+        // (1) Coalesce concurrent callers onto the same in-flight Task.
         if let existing = refreshTasks[accountID] {
             try await existing.value
             return
         }
 
+        // (2) Cooldown: a recent successful refresh covers this caller.
+        //     Without this, sweep + IMAP provider + AUTH-retry can each
+        //     start a brand-new Task back-to-back and trigger rotation flood.
+        if let last = lastRefreshAt[accountID],
+           Date().timeIntervalSince(last) < AuthConstants.minRefreshInterval,
+           !isTokenExpiringSoon(for: accountID) {
+            LogService.log(.debug, .auth, "Refresh skipped (cooldown)",
+                           detail: "account=\(accountID) reason=\(reason)")
+            return
+        }
+
         let task = Task { [self] in
             defer { refreshTasks.removeValue(forKey: accountID) }
-            try await performRefresh(accountID: accountID)
+            // (3) Double-check inside the Task: a previous caller may have
+            //     just finished refreshing between our enqueue and our run.
+            if !isTokenExpiringSoon(for: accountID) {
+                LogService.log(.debug, .auth, "Refresh skipped (token fresh)",
+                               detail: "account=\(accountID) reason=\(reason)")
+                return
+            }
+            try await performRefresh(accountID: accountID, reason: reason)
         }
         refreshTasks[accountID] = task
         try await task.value
     }
 
-    private func performRefresh(accountID: UUID) async throws {
+    private func performRefresh(accountID: UUID, reason: String) async throws {
         let refreshToken: String
         do {
             refreshToken = try keychain.oauthRefreshToken(for: accountID)
@@ -63,7 +86,9 @@ extension AuthService {
             for: accountID, accessToken: tokens.accessToken,
             refreshToken: tokens.refreshToken, expiresAt: expiresAt
         )
-        LogService.log(.info, .auth, "Token refreshed", detail: "\(accountID)")
+        lastRefreshAt[accountID] = Date()
+        LogService.log(.info, .auth, "Token refreshed",
+                       detail: "account=\(accountID) reason=\(reason) expiresIn=\(tokens.expiresIn)s")
     }
 
     // MARK: - Current token (lazy refresh)
@@ -71,7 +96,7 @@ extension AuthService {
     /// Returns valid access token, refreshing if near expiry.
     func currentAccessToken(for accountID: UUID) async throws -> String {
         if isTokenExpiringSoon(for: accountID) {
-            try await refresh(accountID: accountID)
+            try await refresh(accountID: accountID, reason: "lazy")
         }
         return try keychain.oauthAccessToken(for: accountID)
     }
@@ -93,7 +118,7 @@ extension AuthService {
         guard let accounts = try? accountRepository.allEnabled() else { return }
         for account in accounts where account.authType == .oauth2 && account.authState == .ok {
             if isTokenExpiringSoon(for: account.id) {
-                try? await refresh(accountID: account.id)
+                try? await refresh(accountID: account.id, reason: "sweep")
             }
         }
     }

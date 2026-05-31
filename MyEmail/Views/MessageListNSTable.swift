@@ -447,13 +447,19 @@ struct MessageListNSTable: NSViewRepresentable {
                 items.first(where: { $0.id == id })?.isFlagged == false
             })
 
-            menu.addMenuItem(anyUnread ? "Mark as Read" : "Mark as Unread") {
+            let readTitle = anyUnread
+                ? String(localized: "Mark as Read")
+                : String(localized: "Mark as Unread")
+            menu.addMenuItem(readTitle) {
                 [weak self] in self?.parent.onToggleRead(ids)
             }
-            menu.addMenuItem(anyUnflagged ? "Flag" : "Unflag") {
+            let flagTitle = anyUnflagged
+                ? String(localized: "Flag")
+                : String(localized: "Unflag")
+            menu.addMenuItem(flagTitle) {
                 [weak self] in self?.parent.onToggleFlag(ids)
             }
-            menu.addMenuItem("Archive") {
+            menu.addMenuItem(String(localized: "Archive")) {
                 [weak self] in self?.parent.onArchive(ids)
             }
             menu.addItem(.separator())
@@ -461,22 +467,22 @@ struct MessageListNSTable: NSViewRepresentable {
                 [weak self] in self?.parent.onRunRules(ids)
             }
             menu.addItem(.separator())
-            menu.addMenuItem("Delete") {
+            menu.addMenuItem(String(localized: "Delete")) {
                 [weak self] in self?.parent.onDelete(ids)
             }
             if ids.count == 1, let first = ids.first {
                 menu.addItem(.separator())
-                menu.addMenuItem("Open in New Window") {
+                menu.addMenuItem(String(localized: "Open in New Window")) {
                     [weak self] in self?.parent.onOpenInWindow(first)
                 }
-                menu.addMenuItem("View Source") {
+                menu.addMenuItem(String(localized: "View Source")) {
                     [weak self] in self?.parent.onViewSource(first)
                 }
                 menu.addMenuItem(String(localized: "Save to Downloads")) {
                     [weak self] in self?.parent.onSaveAs(first)
                 }
                 menu.addItem(.separator())
-                menu.addMenuItem("Re-sync message") {
+                menu.addMenuItem(String(localized: "Re-sync message")) {
                     [weak self] in self?.parent.onResync(first)
                 }
             }

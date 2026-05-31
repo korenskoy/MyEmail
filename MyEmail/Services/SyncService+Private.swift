@@ -841,20 +841,20 @@ extension SyncService {
 
     // MARK: - Backfill older headers (Thunderbird eager model)
 
-    /// Fetch envelope headers for every UID strictly below `minLocalUID`.
-    /// Thunderbird downloads all headers eagerly (`FindKeysToAdd` in
-    /// `nsImapMailFolder.cpp:3956` + `GetMsgHdrsToDownload` in
-    /// `nsImapProtocol.cpp:4420`) — no bounded window, no pagination. We
-    /// mirror that: every message below our current UID floor gets its
-    /// envelope pulled in a single UID range FETCH.
+    /// Reconcile local DB against the **entire** server UID space [1...uidNext-1].
+    /// Thunderbird `FindKeysToAdd` (`nsImapMailFolder.cpp:3956-4004`) does a
+    /// sorted-merge of local UIDs vs server-live UIDs and appends every UID
+    /// missing locally to `m_keysToFetch` — regardless of where it sits in the
+    /// range. Floor-only backfill misses gaps in the **middle** (e.g. Gmail
+    /// All Mail with 29k expunged-old + 77k interleaved-gap live UIDs).
     ///
     /// Required by QRESYNC/CONDSTORE delta paths because CHANGEDSINCE only
-    /// returns messages whose MODSEQ advanced after the last watermark —
-    /// old untouched messages never appear there.
+    /// returns messages whose MODSEQ advanced — old untouched messages and
+    /// server-side gaps never appear there.
     ///
-    /// Response lines are per-message (≤1 KB each), so the 8 KB line-length
-    /// limit that breaks open-ended `UID SEARCH <min>:*` cannot trip here.
-    /// Returns the set of UIDs that were successfully persisted.
+    /// Chunked FETCH FLAGS keeps each command under Gmail's 60s timeout;
+    /// chunked header FETCH persists each batch immediately so a mid-loop
+    /// failure preserves prior progress.
     @discardableResult
     private func backfillOlderHeaders(
         account: Account, folderID: UUID, folderPath: String,
@@ -863,16 +863,10 @@ extension SyncService {
         serverCount: Int,
         vanishedUIDs: Set<UInt32> = []
     ) async throws -> Set<UInt32> {
-        guard let minUID = minLocalUID, minUID > 1 else { return [] }
-
-        // Thunderbird parity: `FindKeysToAdd` (nsImapMailFolder.cpp:3956) never
-        // FETCHes the raw UID range — it diffs server-known UIDs against the
-        // local DB and pulls only missing ones. For an active mailbox the
-        // expunged UID space is tens of thousands wide with almost no live
-        // messages (e.g. INBOX EXISTS=1 but minLocalUID=61228). A raw
-        // FETCH UID(1):UID(61227) is ~120 empty chunks of pure latency.
-        //
         // EXISTS caps the total: if we already have every live UID, skip.
+        // (TB's `needFullFolderSync = !mFolderHighestUID || flagStateEmpty`
+        // gates a full 1:* fetch on missing state; our equivalent is the
+        // local-vs-server count mismatch.)
         guard serverCount > localUIDs.count else {
             LogService.log(.debug, .sync,
                 "Backfill skipped: local=\(localUIDs.count) == server=\(serverCount)",
@@ -880,69 +874,118 @@ extension SyncService {
             return []
         }
 
-        let upper = minUID - 1
+        // Upper bound = uidNext - 1 (last UID the server has ever assigned).
+        // Fall back to the highest local UID if uidNext isn't persisted yet —
+        // first sync of a brand-new folder.
+        let uidNext = saved.uidNext.map { UInt32($0) } ?? 0
+        let maxLocal = localUIDs.max() ?? 0
+        let upper = max(uidNext > 0 ? uidNext - 1 : 0, maxLocal)
+        guard upper >= 1 else { return [] }
 
-        // Step 1: FETCH flags below our floor (Thunderbird-parity —
-        // `UID FETCH 1:<upper> (FLAGS)`). Per-message response lines
-        // avoid the 8 KB line limit that UID SEARCH hits on big folders.
-        let serverUIDs: Set<UInt32>
-        do {
-            let entries = try await imap.fetchAllFlags(uidRange: 1...upper)
-            var acc: Set<UInt32> = []
-            acc.reserveCapacity(entries.count)
-            for entry in entries where !entry.flags.contains(.deleted) {
-                acc.insert(entry.uid)
+        // Step 1: enumerate server-live UIDs over the full range [1...upper],
+        // chunked. Single `UID FETCH 1:<upper> (FLAGS)` over 135k UIDs times
+        // out on Gmail All Mail (60s default). TB's nsImapProtocol does emit
+        // a single 1:* FLAGS command, but the inbound parsing is incremental;
+        // we don't have that streaming pipeline, so we mirror the intent by
+        // splitting into bounded windows. Each chunk gets recycle treatment
+        // so a poisoned socket reconnects mid-loop instead of failing all.
+        var serverUIDs: Set<UInt32> = []
+        let flagChunks = Self.chunkedUIDRange(lower: 1, upper: upper,
+                                              size: Self.backfillFlagChunkSize)
+        for chunk in flagChunks {
+            do {
+                let entries = try await imap.fetchAllFlags(uidRange: chunk)
+                for entry in entries where !entry.flags.contains(.deleted) {
+                    serverUIDs.insert(entry.uid)
+                }
+            } catch {
+                LogService.log(.warning, .sync,
+                    "Backfill FETCH \(chunk.lowerBound):\(chunk.upperBound) failed",
+                    detail: "\(folderPath): \(error)")
+                await recycleConnectionIfDesynced(error, imap: imap)
+                // Partial progress on flags is fine — next reconcile pass will
+                // re-enumerate the gap; bail to avoid hammering a dead socket.
+                return []
             }
-            serverUIDs = acc
-        } catch {
-            LogService.log(.warning, .sync,
-                "Backfill FETCH 1:\(upper) failed",
-                detail: "\(folderPath): \(error)")
-            await recycleConnectionIfDesynced(error, imap: imap)
-            return []
         }
 
-        // Step 2: intersect — only UIDs we don't already have.
+        // Step 2: TB-style `FindKeysToAdd` — sorted-merge diff. Anything on
+        // the server we don't have locally (and didn't just expunge) needs
+        // its envelope pulled.
         let missing = serverUIDs
             .subtracting(localUIDs)
             .subtracting(vanishedUIDs)
             .sorted()
         guard !missing.isEmpty else {
             LogService.log(.debug, .sync,
-                "Backfill: no missing UIDs below \(minUID) (\(serverUIDs.count) server-live)",
+                "Backfill: no missing UIDs in 1:\(upper) (\(serverUIDs.count) server-live)",
                 detail: folderPath)
             return []
         }
 
         LogService.log(.info, .sync,
-            "Backfill: \(missing.count) missing UIDs below \(minUID)",
+            "Backfill: \(missing.count) missing UIDs in 1:\(upper)",
             detail: folderPath)
 
-        // Step 3: FETCH only the missing UIDs. `fetchHeadersBySet` batches
-        // via UIDSet — swift-nio-imap handles command-line chunking.
-        let infos: [MessageInfo]
-        do {
-            infos = try await imap.fetchHeadersBySet(missing)
-        } catch {
-            LogService.log(.warning, .sync,
-                "Backfill fetch failed",
-                detail: "\(folderPath): \(error)")
-            return []
+        // Step 3: FETCH headers for missing UIDs, chunked. Persist each chunk
+        // immediately so a mid-loop failure preserves what we got rather than
+        // discarding everything on a single timeout.
+        var persistedUIDs: Set<UInt32> = []
+        let headerStride = Self.backfillHeaderChunkSize
+        for chunkStart in stride(from: 0, to: missing.count, by: headerStride) {
+            let chunkEnd = min(chunkStart + headerStride, missing.count)
+            let headerChunk = Array(missing[chunkStart..<chunkEnd])
+            let infos: [MessageInfo]
+            do {
+                infos = try await imap.fetchHeadersBySet(headerChunk)
+            } catch {
+                LogService.log(.warning, .sync,
+                    "Backfill fetch failed",
+                    detail: "\(folderPath) chunk=\(headerChunk.count): \(error)")
+                await recycleConnectionIfDesynced(error, imap: imap)
+                break
+            }
+            let fresh = infos.filter { info in
+                guard let uid = info.uid?.value else { return false }
+                if localUIDs.contains(uid) { return false }
+                if vanishedUIDs.contains(uid) { return false }
+                return true
+            }
+            guard !fresh.isEmpty else { continue }
+            try await persistHeaders(fresh, folderID: folderID, accountID: account.id)
+            for info in fresh {
+                if let uid = info.uid?.value { persistedUIDs.insert(uid) }
+            }
         }
-
-        let fresh = infos.filter { info in
-            guard let uid = info.uid?.value else { return false }
-            if localUIDs.contains(uid) { return false }
-            if vanishedUIDs.contains(uid) { return false }
-            return true
+        if !persistedUIDs.isEmpty {
+            LogService.log(.info, .sync,
+                "Backfill: persisted \(persistedUIDs.count) older headers",
+                detail: folderPath)
         }
-        guard !fresh.isEmpty else { return [] }
+        return persistedUIDs
+    }
 
-        try await persistHeaders(fresh, folderID: folderID, accountID: account.id)
-        LogService.log(.info, .sync,
-            "Backfill: persisted \(fresh.count) older headers",
-            detail: folderPath)
-        return Set(fresh.compactMap { $0.uid?.value })
+    /// Backfill chunk sizing — TB-style bounded UID windows.
+    /// 5000 keeps each FETCH well under Gmail's 60s timeout even on dense
+    /// folders, while still amortizing setup cost across many UIDs.
+    private static let backfillFlagChunkSize: UInt32 = 5_000
+    /// Header fetch is heavier per UID (envelopes + previews) — keep smaller.
+    private static let backfillHeaderChunkSize: Int = 500
+
+    /// Split [lower...upper] into closed ranges no larger than `size`.
+    nonisolated private static func chunkedUIDRange(
+        lower: UInt32, upper: UInt32, size: UInt32
+    ) -> [ClosedRange<UInt32>] {
+        guard lower <= upper, size > 0 else { return [] }
+        var out: [ClosedRange<UInt32>] = []
+        var cursor = lower
+        while cursor <= upper {
+            let end = min(upper, cursor &+ size - 1)
+            out.append(cursor...end)
+            if end == UInt32.max { break }
+            cursor = end + 1
+        }
+        return out
     }
 
     // MARK: - Flag sync via CONDSTORE CHANGEDSINCE (RFC 7162)

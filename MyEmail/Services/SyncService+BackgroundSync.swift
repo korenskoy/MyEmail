@@ -115,6 +115,16 @@ extension SyncService {
     }
 
     func pollFolderStatuses(for account: Account) async {
+        // Don't poll while bootstrap sync is running — it serializes through
+        // the same per-account lock and would just stack work behind it. The
+        // bootstrap path syncs INBOX itself; non-INBOX folders are covered by
+        // the prefetch sweep that follows in `_runSyncAccountLocked`.
+        if runningSyncs[account.id] != nil {
+            LogService.log(.debug, .sync, "STATUS poll skipped (account sync in flight)",
+                           detail: account.email)
+            return
+        }
+
         let imap = getOrCreateIMAPService(for: account)
 
         // Make sure we're connected; skip silently if not
@@ -133,17 +143,33 @@ extension SyncService {
                 .map { String($0.dropFirst(accountPrefix.count)) }
         )
 
-        // Load all folders, excluding INBOX, \All, and IDLE-active folders
+        // Exclude:
+        //   • INBOX (covered by IDLE)
+        //   • \All / Archive (Gmail returns \Archive in SPECIAL-USE for All Mail,
+        //     stored as 'archive'; polling a 135k-message folder costs more than
+        //     it earns — incrementalSync there is a multi-minute backfill)
+        //   • IDLE-active folders (already pushing changes live)
+        //   • folders with a sync currently in flight (`syncingFolders` —
+        //     prevents STATUS poll from stacking duplicate work behind a long
+        //     user-initiated incrementalSync, e.g. on-select All Mail open)
         let folders: [Folder] = (try? await pool.read { db in
             try Folder
                 .filter(Column("account_id") == account.id)
                 .filter(Column("special_use") != "inbox")
                 .filter(Column("special_use") != "all")
+                .filter(Column("special_use") != "archive")
                 .fetchAll(db)
-        })?.filter { !idlePaths.contains($0.path) } ?? []
+        })?.filter { !idlePaths.contains($0.path) && !syncingFolders.contains($0.id) } ?? []
 
         for folder in folders {
             if Task.isCancelled { break }
+            // Re-check inside the loop — a user-initiated sync may have started
+            // for this folder while we were polling earlier folders.
+            if syncingFolders.contains(folder.id) {
+                LogService.log(.debug, .sync, "STATUS poll skipped (folder sync in flight)",
+                               detail: folder.path)
+                continue
+            }
             await pollStatus(folder: folder, account: account, imap: imap)
             // Throttle: 100ms between STATUS calls
             try? await Task.sleep(for: .milliseconds(100))

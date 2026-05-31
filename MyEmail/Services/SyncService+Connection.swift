@@ -435,17 +435,28 @@ extension SyncService {
 
     // MARK: - Session-desync detection (Thunderbird `HandleProtocolError` parity)
 
-    /// True for BAD responses that indicate the IMAP session itself is
-    /// desynced — Gmail's `bad(Unknown command <session-id>)` after NAT
-    /// timeout, or RFC 5530 `[CLIENTBUG]` from mail.ru / Yahoo when the
-    /// server thinks we sent a command in the wrong state. Reusing the
-    /// same socket only repeats the same error; the catch-site marks the
+    /// True for errors that indicate the IMAP session itself is desynced or
+    /// dead and the socket must not be reused:
+    ///   • BAD `Unknown command <session-id>` — Gmail's post-NAT-timeout signal
+    ///   • RFC 5530 `[CLIENTBUG]` — mail.ru/Yahoo "wrong state" rejection
+    ///   • `IMAPError.timeout` / "operation timed out" — server stopped reading
+    ///     or replying; on Gmail the very next command echoes back as a BAD.
+    /// Reusing the same socket only repeats the failure; catch-sites mark the
     /// IMAPService for probe so the next entry-point reconnects.
     nonisolated static func isSessionDesyncError(_ error: Error) -> Bool {
-        guard let imapErr = error as? IMAPError,
-              case .commandFailed(let reason) = imapErr else { return false }
-        let lower = reason.lowercased()
-        return lower.contains("unknown command") || lower.contains("[clientbug]")
+        if let imapErr = error as? IMAPError {
+            switch imapErr {
+            case .timeout:
+                return true
+            case .commandFailed(let reason):
+                let lower = reason.lowercased()
+                return lower.contains("unknown command") || lower.contains("[clientbug]")
+            default:
+                break
+            }
+        }
+        let lower = "\(error)".lowercased()
+        return lower.contains("operation timed out") || lower.contains("broken pipe")
     }
 
     /// If `error` looks like a session-desync BAD, mark `imap` so the next

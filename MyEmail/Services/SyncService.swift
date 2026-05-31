@@ -50,12 +50,16 @@ final class SyncService {
     var recentMutationStore: [UUID: Date] = [:]
 
     /// In-flight lazy folder syncs (prevents duplicate concurrent syncs).
-    private var syncingFolders: Set<UUID> = []
+    /// Read by `SyncService+BackgroundSync` to skip STATUS poll on folders
+    /// already being synced by a user-initiated open.
+    var syncingFolders: Set<UUID> = []
 
     /// Per-account in-flight sync tasks. Concurrent `syncAccount` calls for
     /// the same account coalesce — the second caller awaits the first task's
     /// result instead of opening a second IMAP connection & running SELECT twice.
-    private var runningSyncs: [UUID: Task<Folder?, Never>] = [:]
+    /// Read by `SyncService+BackgroundSync` to skip STATUS poll while bootstrap
+    /// sync is running.
+    var runningSyncs: [UUID: Task<Folder?, Never>] = [:]
 
     /// Per-account serial queue tail (Thunderbird URL queue parity).
     /// `nsImapProtocol` runs exactly one URL at a time per connection
@@ -244,7 +248,7 @@ final class SyncService {
                account.authType == .oauth2, let auth = authService {
                 LogService.log(.warning, .sync, "Auth failed, refreshing token", detail: account.email)
                 do {
-                    try await auth.refresh(accountID: account.id)
+                    try await auth.refresh(accountID: account.id, reason: "auth-failure-retry")
                     let imap = getOrCreateIMAPService(for: account)
                     await imap.disconnect()
                     // Recurse into *locked* body — we still hold both the

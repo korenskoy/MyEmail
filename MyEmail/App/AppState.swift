@@ -215,12 +215,19 @@ final class AppState {
             .tracking { db in
                 try MessageListItem.fetchAll(db, sql: sql, arguments: arguments)
             }
-            .start(in: pool, scheduling: .immediate) { error in
+            .start(in: pool, scheduling: .async(onQueue: .global(qos: .userInitiated))) { error in
                 LogService.log(.error, .db, "Messages observation error", detail: "\(error)")
             } onChange: { [weak self] items in
-                // .immediate delivers all values on main queue;
-                // synchronous update avoids intermediate empty state (§9.5).
-                MainActor.assumeIsolated {
+                // Async scheduling: the initial fetch runs on a background
+                // queue, so opening a huge folder (e.g. Gmail All Mail with
+                // 135k rows) no longer blocks MainActor on the SELECT and the
+                // 135k MessageListItem allocations. UI stays responsive; rows
+                // appear once the fetch completes (~100-300 ms on SSD).
+                //
+                // `messageItems = []` is already set synchronously in
+                // `sidebarSelectionChanged` before this binds, so there is no
+                // stale-row flash — only a brief empty list during the fetch.
+                Task { @MainActor [weak self] in
                     self?.messageItems = items
                 }
             }

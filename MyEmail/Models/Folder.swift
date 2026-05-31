@@ -59,7 +59,7 @@ struct Folder: Identifiable, Codable, Hashable, Sendable,
         case .drafts:  String(localized: "Drafts")
         case .trash:   String(localized: "Trash")
         case .junk:    String(localized: "Junk")
-        case .archive: String(localized: "Archive")
+        case .archive: String(localized: "Archive folder")
         case .all:     String(localized: "All Mail")
         }
     }

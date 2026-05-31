@@ -236,7 +236,7 @@ struct DebugLogRow: View {
         .padding(.vertical, 1)
         .contentShape(Rectangle())
         .contextMenu {
-            Button("Copy") {
+            Button(String(localized: "Copy")) {
                 DebugLogFormatter.copyToClipboard(
                     DebugLogFormatter.plainText(for: entry)
                 )
