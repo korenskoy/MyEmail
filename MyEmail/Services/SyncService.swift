@@ -248,7 +248,9 @@ final class SyncService {
                account.authType == .oauth2, let auth = authService {
                 LogService.log(.warning, .sync, "Auth failed, refreshing token", detail: account.email)
                 do {
-                    try await auth.refresh(accountID: account.id, reason: "auth-failure-retry")
+                    // force: server actually rejected the token — bypass the
+                    // proactive back-off / cooldown and mint a fresh one now.
+                    try await auth.refresh(accountID: account.id, reason: "auth-failure-retry", force: true)
                     let imap = getOrCreateIMAPService(for: account)
                     await imap.disconnect()
                     // Recurse into *locked* body — we still hold both the

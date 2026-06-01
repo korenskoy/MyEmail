@@ -19,29 +19,47 @@ extension AuthService {
     /// rotations come too fast.
     ///
     /// `reason` is logged so flood sources can be diagnosed.
-    func refresh(accountID: UUID, reason: String = "explicit") async throws {
+    ///
+    /// `force` bypasses the proactive back-off and cooldown — used by the
+    /// reactive auth-failure-retry path where the server actually rejected the
+    /// current token, so we must mint a new one regardless of our timers.
+    func refresh(accountID: UUID, reason: String = "explicit", force: Bool = false) async throws {
         // (1) Coalesce concurrent callers onto the same in-flight Task.
         if let existing = refreshTasks[accountID] {
             try await existing.value
             return
         }
 
-        // (2) Cooldown: a recent successful refresh covers this caller.
-        //     Without this, sweep + IMAP provider + AUTH-retry can each
-        //     start a brand-new Task back-to-back and trigger rotation flood.
-        if let last = lastRefreshAt[accountID],
-           Date().timeIntervalSince(last) < AuthConstants.minRefreshInterval,
-           !isTokenExpiringSoon(for: accountID) {
-            LogService.log(.debug, .auth, "Refresh skipped (cooldown)",
-                           detail: "account=\(accountID) reason=\(reason)")
-            return
+        if !force {
+            // (2a) Proactive back-off: Google handed back a token it would not
+            //      extend, so re-refreshing before its real expiry is futile and
+            //      only floods the grant endpoint (→ invalid_grant). Park until
+            //      the token actually expires, then refresh reactively.
+            if let until = proactiveBackoffUntil[accountID], Date() < until {
+                LogService.log(.debug, .auth, "Refresh skipped (backoff)",
+                               detail: "account=\(accountID) reason=\(reason)")
+                return
+            }
+
+            // (2b) Cooldown — UNCONDITIONAL. The previous `&& !isTokenExpiringSoon`
+            //      escape disarmed this gate for the token's whole final 5-min
+            //      window and let sweep + lazy flood Google (hard rule 15, §9.9).
+            //      A token refreshed < minRefreshInterval ago is still usable, so
+            //      reusing it for that window is always safe.
+            if let last = lastRefreshAt[accountID],
+               Date().timeIntervalSince(last) < AuthConstants.minRefreshInterval {
+                LogService.log(.debug, .auth, "Refresh skipped (cooldown)",
+                               detail: "account=\(accountID) reason=\(reason)")
+                return
+            }
         }
 
         let task = Task { [self] in
             defer { refreshTasks.removeValue(forKey: accountID) }
             // (3) Double-check inside the Task: a previous caller may have
             //     just finished refreshing between our enqueue and our run.
-            if !isTokenExpiringSoon(for: accountID) {
+            //     Forced callers always proceed — the server rejected the token.
+            if !force, !isTokenExpiringSoon(for: accountID) {
                 LogService.log(.debug, .auth, "Refresh skipped (token fresh)",
                                detail: "account=\(accountID) reason=\(reason)")
                 return
@@ -87,6 +105,17 @@ extension AuthService {
             refreshToken: tokens.refreshToken, expiresAt: expiresAt
         )
         lastRefreshAt[accountID] = Date()
+
+        // If Google handed back a token that is ITSELF still expiring soon, it
+        // served the cached near-expiry token and will not mint a fresh one
+        // until this one truly expires. Park proactive refreshes until then so a
+        // single refresh — not a 5-minute flood — covers the token's tail end.
+        if TimeInterval(tokens.expiresIn) < AuthConstants.tokenRefreshThreshold {
+            proactiveBackoffUntil[accountID] = expiresAt
+        } else {
+            proactiveBackoffUntil.removeValue(forKey: accountID)
+        }
+
         LogService.log(.info, .auth, "Token refreshed",
                        detail: "account=\(accountID) reason=\(reason) expiresIn=\(tokens.expiresIn)s")
     }
@@ -152,6 +181,10 @@ extension AuthService {
             for: accountID, accessToken: tokens.accessToken,
             refreshToken: tokens.refreshToken, expiresAt: expiresAt
         )
+        // Fresh grant — wipe stale rate-limit/backoff history so the new
+        // long-lived token isn't suppressed by the dead token's timers.
+        proactiveBackoffUntil.removeValue(forKey: accountID)
+        lastRefreshAt.removeValue(forKey: accountID)
         try accountRepository.setAuthState(.ok, for: accountID)
         LogService.log(.info, .auth, "Re-authenticated \(email)")
     }

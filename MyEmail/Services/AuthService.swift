@@ -48,6 +48,15 @@ actor AuthService {
     /// cause refresh-token rotation to invalidate the grant.
     var lastRefreshAt: [UUID: Date] = [:]
 
+    /// Park proactive refreshes until this instant. Google serves the SAME
+    /// cached access token (shrinking expires_in) on rapid refreshes and only
+    /// mints a fresh one once the old token actually expires. When a refresh
+    /// comes back still-expiring-soon we record its real expiry here and stop
+    /// proactively refreshing until then — otherwise sweep + lazy hammer the
+    /// grant endpoint for the token's final 5 min and trip Google's rotation /
+    /// abuse guard → invalid_grant → forced re-auth (hard rule 15, §9.9).
+    var proactiveBackoffUntil: [UUID: Date] = [:]
+
     var sweepTask: Task<Void, Never>?
 
     init(
