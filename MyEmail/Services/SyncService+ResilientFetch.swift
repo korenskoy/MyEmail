@@ -195,6 +195,9 @@ extension SyncService {
 
             var info = MessageInfo(sequenceNumber: SequenceNumber(0))
             info.uid = UID(uid)
+            // RFC822.SIZE isn't fetched on this fallback path; the raw message
+            // octet count is the same value, so the Size column stays populated.
+            info.size = rawData.count
             info.subject = SyncService.sanitizeSubject(email.subject)
             info.from = fromStr
             info.to = email.to.map(\.formatted)
