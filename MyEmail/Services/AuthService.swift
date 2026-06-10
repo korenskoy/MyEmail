@@ -48,6 +48,14 @@ actor AuthService {
     /// cause refresh-token rotation to invalidate the grant.
     var lastRefreshAt: [UUID: Date] = [:]
 
+    /// Last refresh *attempt* timestamp per account (success or failure). §18:
+    /// on a stable failure (network error, transient 5xx) the success-only
+    /// `lastRefreshAt` never advances, so the cooldown stays unarmed and every
+    /// lazy `currentAccessToken` re-hits the grant endpoint (retry-storm). This
+    /// timer arms a backoff after a failed attempt too. Does NOT relax hard
+    /// rule 15 — the success cooldown remains unconditional.
+    var lastRefreshAttemptAt: [UUID: Date] = [:]
+
     /// Park proactive refreshes until this instant. Google serves the SAME
     /// cached access token (shrinking expires_in) on rapid refreshes and only
     /// mints a fresh one once the old token actually expires. When a refresh

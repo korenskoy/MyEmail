@@ -17,7 +17,10 @@ extension SyncService {
     // MARK: - Network monitoring
 
     func startNetworkMonitor() {
+        // rule 3: hold the monitor in a stored MainActor property, not a local.
+        pathMonitor?.cancel()
         let monitor = NWPathMonitor()
+        pathMonitor = monitor
         monitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
                 guard let self else { return }
@@ -27,7 +30,12 @@ extension SyncService {
                 if !wasOnline && self.isOnline {
                     LogService.log(.info, .sync, "Network recovered, draining queue")
                     let processed = await self.offlineQueue?.drain { action in
-                        try await self.executeQueuedAction(action)
+                        // §9.5: serialize replay on the per-account socket so a
+                        // drained SELECT/STORE can't interleave with a concurrent
+                        // sync/IDLE flow sharing the same IMAP connection.
+                        try await self.runSerializedPerAccount(action.accountID) { [weak self] in
+                            try await self?.executeQueuedAction(action)
+                        }
                     } ?? 0
                     // Only refresh when drain actually replayed something —
                     // otherwise initial bootstrap sync already covered this and
@@ -59,9 +67,20 @@ extension SyncService {
         let key = "\(account.id):\(folderPath)"
         // Already running?
         if idleTasks[key] != nil { return }
-        idleTasks[key] = Task { [weak self] in
-            await self?.runIDLESession(account: account, folderPath: folderPath)
-            await MainActor.run { self?.idleTasks.removeValue(forKey: key) }
+        let task: Task<Void, Never> = Task { [weak self] in
+            guard let self else { return }
+            await self.runIDLESession(account: account, folderPath: folderPath)
+        }
+        idleTasks[key] = task
+        // §15: clean up only OUR task on completion. An unconditional
+        // removeValue would delete a newer task that replaced this key after a
+        // restart, leaving an untracked duplicate IDLE (schedulePrefetch parity).
+        Task { [weak self] in
+            _ = await task.value
+            await MainActor.run {
+                guard let self else { return }
+                if self.idleTasks[key] == task { self.idleTasks.removeValue(forKey: key) }
+            }
         }
     }
 
@@ -95,7 +114,17 @@ extension SyncService {
 
                 try? await session.done()
                 LogService.log(.debug, .imap, "IDLE session ended", detail: folderPath)
-                // Outer while loop restarts IDLE on clean termination
+                // §16: even on a clean exit, back off before reconnecting. A
+                // server that ends IDLE immediately (or a transient that looks
+                // clean) would otherwise spin this loop, flooding the server with
+                // reconnects. 5s is short enough to keep push latency low.
+                if Task.isCancelled { return }
+                do {
+                    try await Task.sleep(for: .seconds(5))
+                } catch {
+                    return
+                }
+                // Outer while loop restarts IDLE after the backoff.
             } catch is CancellationError {
                 return
             } catch {
@@ -234,21 +263,23 @@ extension SyncService {
         uid: UInt32, attrs: [MessageAttribute],
         folderPath: String, accountID: UUID
     ) async {
-        // Extract flags from NIOIMAPCore.MessageAttribute
+        // Extract flags from NIOIMAPCore.MessageAttribute. RFC 3501: flag atoms
+        // are case-insensitive — lowercase both sides so e.g. `$forwarded` from
+        // non-canonical servers still matches (§10).
         var flagStrs: Set<String> = []
         for attr in attrs {
             if case .flags(let flags) = attr {
-                flagStrs = Set(flags.map { String($0) })
+                flagStrs = Set(flags.map { String($0).lowercased() })
             }
         }
         guard !flagStrs.isEmpty else { return }
 
-        // NIOIMAPCore Flag → String: "\Seen", "\Flagged", etc.
-        let isRead = flagStrs.contains("\\Seen")
-        let isFlagged = flagStrs.contains("\\Flagged")
-        let isAnswered = flagStrs.contains("\\Answered")
-        let isForwarded = flagStrs.contains("$Forwarded")
-        let isDraft = flagStrs.contains("\\Draft")
+        // NIOIMAPCore Flag → String: "\Seen", "\Flagged", etc. (lowercased above)
+        let isRead = flagStrs.contains("\\seen")
+        let isFlagged = flagStrs.contains("\\flagged")
+        let isAnswered = flagStrs.contains("\\answered")
+        let isForwarded = flagStrs.contains("$forwarded")
+        let isDraft = flagStrs.contains("\\draft")
 
         guard let msgID: UUID = try? await pool.read({ db in
             try UUID.fetchOne(db, sql: """
@@ -369,6 +400,9 @@ extension SyncService {
             tick += 1
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                // §27: clear expired optimistic-cooldown entries so a bulk op's
+                // 10k UUIDs don't live in memory until restart.
+                self.pruneExpiredMutations()
                 await self.pollFolderStatuses()
                 await self.updateDockBadge()
                 // Every 5th tick (5 min) — full refresh as safety net

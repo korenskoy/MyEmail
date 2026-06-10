@@ -12,16 +12,19 @@ enum HTMLHeadInjector {
 
     // MARK: - CSP meta tag (remote content blocked by default)
 
+    // §24: no `file:` in img-src — inline images are served via the
+    // `myemail-cid:` scheme handler and `data:`; allowing `file:` would let
+    // crafted HTML probe the local filesystem.
     static let restrictiveCSP = """
         <meta http-equiv="Content-Security-Policy" \
-        content="default-src 'none'; img-src 'self' data: file: myemail-cid:; \
+        content="default-src 'none'; img-src 'self' data: myemail-cid:; \
         style-src 'unsafe-inline'; font-src data:; \
         base-uri 'none'; form-action 'none';">
         """
 
     static let permissiveCSP = """
         <meta http-equiv="Content-Security-Policy" \
-        content="default-src 'none'; img-src * data: file: myemail-cid:; \
+        content="default-src 'none'; img-src * data: myemail-cid:; \
         style-src 'unsafe-inline'; font-src data: *; \
         base-uri 'none'; form-action 'none';">
         """
@@ -67,12 +70,35 @@ enum HTMLHeadInjector {
         options: .caseInsensitive
     )
 
+    /// §19: matches `<meta http-equiv="refresh" ...>`. CSP `default-src 'none'`
+    /// does not cover meta-refresh navigation, so a crafted message could
+    /// auto-redirect the WKWebView. Strip it before render.
+    ///
+    /// `[^>]` (not `[\s\S]`) bounds the match to the current tag — so a crafted
+    /// `<meta charset>` immediately followed by a refresh meta isn't swallowed
+    /// together (no collateral removal), while still tolerating newlines inside
+    /// the tag and a missing closing `>` (`>?`) on a broken/split tag. `\b`
+    /// anchors the `refresh` keyword so `http-equiv="content-type"` etc. don't
+    /// match.
+    // swiftlint:disable:next force_try
+    private static let metaRefreshPattern = try! NSRegularExpression(
+        pattern: #"<meta\b[^>]*?http-equiv\s*=\s*['"]?\s*refresh\b[^>]*>?"#,
+        options: .caseInsensitive
+    )
+
     nonisolated static func prepare(
         html: String,
         allowRemoteContent: Bool,
         inlineAttachments: [InlineRef] = []
     ) -> String {
         var result = html
+
+        // §19: strip meta-refresh unconditionally — CSP default-src 'none' does
+        // not stop it, and it arrives in WKNavigationDelegate as `.other`.
+        let mrRange = NSRange(result.startIndex..., in: result)
+        result = metaRefreshPattern.stringByReplacingMatches(
+            in: result, range: mrRange, withTemplate: ""
+        )
 
         // Rewrite cid: → myemail-cid: for custom URL scheme handler.
         // WKWebView + loadHTMLString blocks file:// from about:blank origin,

@@ -52,6 +52,36 @@ extension SyncService {
         return (folder.id, sel)
     }
 
+    // MARK: - Local sync state read (§9.2)
+
+    /// Reads local UIDs plus pending-action UIDs in both directions for a folder.
+    /// - pendingSourceUIDs: actions LEAVING this folder — their source-UID
+    ///   legitimately disappears from the server, so must NOT be ghosted.
+    /// - pendingTargetUIDs: actions ARRIVING in this folder — an optimistic move
+    ///   writes the source-UID under the target folder_id before the server
+    ///   assigns a new one; reconcile of the target would otherwise ghost it
+    ///   → rollback + duplicate. Both are subtracted in every ghost/phantom branch.
+    private func readLocalSyncState(
+        folderID: UUID, folderPath: String, accountID: UUID
+    ) async throws -> (Set<UInt32>, Set<UInt32>, Set<UInt32>) {
+        try await pool.read { db -> (Set<UInt32>, Set<UInt32>, Set<UInt32>) in
+            let rows = try UInt32.fetchAll(db, sql:
+                "SELECT uid FROM messages WHERE folder_id = ? AND uid > 0",
+                arguments: [folderID])
+            let source = try UInt32.fetchAll(db, sql: """
+                SELECT message_uid FROM pending_actions
+                WHERE source_folder_path = ? AND account_id = ?
+                  AND status != 'failed' AND message_uid IS NOT NULL
+                """, arguments: [folderPath, accountID])
+            let target = try UInt32.fetchAll(db, sql: """
+                SELECT message_uid FROM pending_actions
+                WHERE target_folder_path = ? AND account_id = ?
+                  AND status != 'failed' AND message_uid IS NOT NULL
+                """, arguments: [folderPath, accountID])
+            return (Set(rows), Set(source), Set(target))
+        }
+    }
+
     // MARK: - Unified incremental sync (Thunderbird §5.2)
 
     func incrementalSync(
@@ -134,20 +164,10 @@ extension SyncService {
         // Step 3: Remember highestKnownUid for notification decisions
         let highestKnownUid = saved.highestKnownUid ?? 0
 
-        // Read local state: UIDs + pending action UIDs.
+        // Read local state: UIDs + pending action UIDs (both directions, §9.2).
         let accountID = account.id
-        let (localUIDs, pendingSourceUIDs) = try await pool.read { db
-            -> (Set<UInt32>, Set<UInt32>) in
-            let rows = try UInt32.fetchAll(db, sql:
-                "SELECT uid FROM messages WHERE folder_id = ? AND uid > 0",
-                arguments: [folderID])
-            let source = try UInt32.fetchAll(db, sql: """
-                SELECT message_uid FROM pending_actions
-                WHERE source_folder_path = ? AND account_id = ?
-                  AND status != 'failed' AND message_uid IS NOT NULL
-                """, arguments: [folderPath, accountID])
-            return (Set(rows), Set(source))
-        }
+        let (localUIDs, pendingSourceUIDs, pendingTargetUIDs) =
+            try await readLocalSyncState(folderID: folderID, folderPath: folderPath, accountID: accountID)
 
         // Step 4: Branch on sync strategy.
         if localUIDs.isEmpty {
@@ -204,6 +224,7 @@ extension SyncService {
                 account: account, folderID: folderID, folderPath: folderPath,
                 imap: imap, saved: saved, sel: sel,
                 localUIDs: localUIDs, pendingSourceUIDs: pendingSourceUIDs,
+                pendingTargetUIDs: pendingTargetUIDs,
                 highestKnownUid: highestKnownUid
             )
             return
@@ -218,6 +239,7 @@ extension SyncService {
                 account: account, folderID: folderID, folderPath: folderPath,
                 imap: imap, saved: saved, sel: sel,
                 localUIDs: localUIDs, pendingSourceUIDs: pendingSourceUIDs,
+                pendingTargetUIDs: pendingTargetUIDs,
                 highestKnownUid: highestKnownUid
             )
             return
@@ -229,6 +251,7 @@ extension SyncService {
             imap: imap, saved: saved, sel: sel,
             localUIDs: localUIDs,
             pendingSourceUIDs: pendingSourceUIDs,
+            pendingTargetUIDs: pendingTargetUIDs,
             highestKnownUid: highestKnownUid
         )
     }
@@ -252,6 +275,7 @@ extension SyncService {
         account: Account, folderID: UUID, folderPath: String,
         imap: IMAPService, saved: Folder, sel: Mailbox.Selection,
         localUIDs: Set<UInt32>, pendingSourceUIDs: Set<UInt32>,
+        pendingTargetUIDs: Set<UInt32>,
         highestKnownUid: UInt32
     ) async throws {
         LogService.log(.info, .sync, "sync path: qresync", detail: folderPath)
@@ -262,10 +286,13 @@ extension SyncService {
         let serverCount = sel.messageCount
         let savedModSeq = UInt64(max(saved.highestModSequence ?? 0, 0))
 
-        // 1) Ghosts — VANISHED (EARLIER) already delivered.
+        // 1) Ghosts — VANISHED (EARLIER) already delivered. Subtract both
+        //    pending directions (§9.2): source-UIDs leaving and target-UIDs
+        //    arriving via an in-flight optimistic move.
         let ghostUIDs = sel.vanishedUIDs
             .intersection(localUIDs)
             .subtracting(pendingSourceUIDs)
+            .subtracting(pendingTargetUIDs)
 
         // 2) Delta FETCH for new + mutated messages.
         let changedInfos: [MessageInfo]
@@ -279,6 +306,7 @@ extension SyncService {
                 account: account, folderID: folderID, folderPath: folderPath,
                 imap: imap, saved: saved, sel: sel,
                 localUIDs: localUIDs, pendingSourceUIDs: pendingSourceUIDs,
+                pendingTargetUIDs: pendingTargetUIDs,
                 highestKnownUid: highestKnownUid
             )
             return
@@ -336,42 +364,15 @@ extension SyncService {
             - ghostUIDs.count
             + deltaNewUIDs.subtracting(localUIDs).count
             - pendingDeleteCount
-        var phantomUIDs: Set<UInt32> = []
-        // Same shape as the CONDSTORE ghost-recheck below: only meaningful
-        // when the server has FEWER live messages than we expect. A larger
-        // serverCount is an unbackfilled gap, not phantoms.
-        let liveLocalCandidates = localUIDs.union(deltaNewUIDs).subtracting(ghostUIDs)
-        if serverCount < expectedCount,
-           let minLocal = liveLocalCandidates.min(),
-           let maxLocal = liveLocalCandidates.max() {
-            LogService.log(.info, .sync, "sync path: qresync phantom-recheck",
-                detail: "\(folderPath): expected=\(expectedCount) server=\(serverCount) range=\(minLocal)…\(maxLocal)")
-            let entries: [(uid: UInt32, flags: [Flag], modSeq: UInt64?)]
-            do {
-                entries = try await imap.fetchAllFlags(uidRange: minLocal...maxLocal)
-            } catch {
-                Self.dumpParserErrorBuffer(error, context: "qresync phantom-recheck")
-                throw error
-            }
-            var serverUIDs: Set<UInt32> = []
-            serverUIDs.reserveCapacity(entries.count)
-            for entry in entries where !entry.flags.contains(.deleted) {
-                serverUIDs.insert(entry.uid)
-            }
-            phantomUIDs = liveLocalCandidates.subtracting(serverUIDs).subtracting(pendingSourceUIDs)
-            if !phantomUIDs.isEmpty {
-                let phantoms = phantomUIDs
-                try await pool.write { db in
-                    try Message
-                        .filter(Column("folder_id") == folderID)
-                        .filter(phantoms.contains(Column("uid")))
-                        .deleteAll(db)
-                }
-                LogService.log(.info, .sync,
-                    "Removed \(phantomUIDs.count) phantom UIDs via SEARCH reconcile",
-                    detail: folderPath)
-            }
-        }
+        let phantomUIDs = try await qresyncPhantomRecheck(
+            folderID: folderID, folderPath: folderPath, imap: imap,
+            input: PhantomRecheckInput(
+                serverCount: serverCount, expectedCount: expectedCount,
+                localUIDs: localUIDs, deltaNewUIDs: deltaNewUIDs, ghostUIDs: ghostUIDs,
+                pendingSourceUIDs: pendingSourceUIDs, pendingTargetUIDs: pendingTargetUIDs,
+                pendingDeleteCount: pendingDeleteCount
+            )
+        )
 
         // Backfill every untouched message below the current UID floor —
         // CHANGEDSINCE only covers mutated MODSEQs, so historical headers
@@ -425,6 +426,71 @@ extension SyncService {
             detail: "\(folderPath) newUIDs=\(deltaNewUIDs.count) changedFlags=\(existingFlags.count) vanished=\(ghostUIDs.count) phantom=\(phantomUIDs.count) backfilled=\(backfilledUIDs.count) modseq=\(savedModSeq)→\(newMax)")
     }
 
+    /// Bounded phantom-recheck for the QRESYNC path. QRESYNC's VANISHED set only
+    /// covers server-side expunges, so source-folder UIDs written under this
+    /// folder_id by an optimistic MOVE (and never live here) stay invisible.
+    /// §13: EXISTS counts \Deleted-but-not-expunged, so force the recheck when we
+    /// have pending deletes here even if EXISTS shows no drop. Deletes phantoms
+    /// in place and returns them for logging.
+    /// Inputs for `qresyncPhantomRecheck`, bundled to keep the parameter list
+    /// small. All UID sets/counts are computed by the caller from the delta.
+    struct PhantomRecheckInput: Sendable {
+        let serverCount: Int
+        let expectedCount: Int
+        let localUIDs: Set<UInt32>
+        let deltaNewUIDs: Set<UInt32>
+        let ghostUIDs: Set<UInt32>
+        let pendingSourceUIDs: Set<UInt32>
+        let pendingTargetUIDs: Set<UInt32>
+        let pendingDeleteCount: Int
+    }
+
+    private func qresyncPhantomRecheck(
+        folderID: UUID, folderPath: String, imap: IMAPService,
+        input: PhantomRecheckInput
+    ) async throws -> Set<UInt32> {
+        let serverCount = input.serverCount
+        let expectedCount = input.expectedCount
+        let pendingSourceUIDs = input.pendingSourceUIDs
+        let pendingTargetUIDs = input.pendingTargetUIDs
+        let forceGhostRecheck = input.pendingDeleteCount > 0
+        let liveLocalCandidates = input.localUIDs.union(input.deltaNewUIDs)
+            .subtracting(input.ghostUIDs)
+        guard (serverCount < expectedCount || forceGhostRecheck),
+              let minLocal = liveLocalCandidates.min(),
+              let maxLocal = liveLocalCandidates.max() else { return [] }
+
+        LogService.log(.info, .sync, "sync path: qresync phantom-recheck",
+            detail: "\(folderPath): expected=\(expectedCount) server=\(serverCount) range=\(minLocal)…\(maxLocal)")
+        let entries: [(uid: UInt32, flags: [Flag], modSeq: UInt64?)]
+        do {
+            entries = try await imap.fetchAllFlags(uidRange: minLocal...maxLocal)
+        } catch {
+            Self.dumpParserErrorBuffer(error, context: "qresync phantom-recheck")
+            throw error
+        }
+        var serverUIDs: Set<UInt32> = []
+        serverUIDs.reserveCapacity(entries.count)
+        for entry in entries where !entry.flags.contains(.deleted) {
+            serverUIDs.insert(entry.uid)
+        }
+        let phantomUIDs = liveLocalCandidates.subtracting(serverUIDs)
+            .subtracting(pendingSourceUIDs).subtracting(pendingTargetUIDs)
+        if !phantomUIDs.isEmpty {
+            let phantoms = phantomUIDs
+            try await pool.write { db in
+                try Message
+                    .filter(Column("folder_id") == folderID)
+                    .filter(phantoms.contains(Column("uid")))
+                    .deleteAll(db)
+            }
+            LogService.log(.info, .sync,
+                "Removed \(phantomUIDs.count) phantom UIDs via SEARCH reconcile",
+                detail: folderPath)
+        }
+        return phantomUIDs
+    }
+
     // MARK: - CONDSTORE primary sync (RFC 7162)
 
     /// CONDSTORE-based incremental sync. Single `UID FETCH 1:* (CHANGEDSINCE <modseq>)`
@@ -436,6 +502,7 @@ extension SyncService {
         account: Account, folderID: UUID, folderPath: String,
         imap: IMAPService, saved: Folder, sel: Mailbox.Selection,
         localUIDs: Set<UInt32>, pendingSourceUIDs: Set<UInt32>,
+        pendingTargetUIDs: Set<UInt32>,
         highestKnownUid: UInt32
     ) async throws {
         LogService.log(.info, .sync, "sync path: condstore", detail: folderPath)
@@ -461,6 +528,7 @@ extension SyncService {
                 imap: imap, saved: saved, sel: sel,
                 localUIDs: localUIDs,
                 pendingSourceUIDs: pendingSourceUIDs,
+                pendingTargetUIDs: pendingTargetUIDs,
                 highestKnownUid: highestKnownUid
             )
             return
@@ -498,20 +566,21 @@ extension SyncService {
         let expectedCount = localUIDs.count + newUIDs.count - pendingDeleteCount
 
         var ghostUIDs: Set<UInt32> = []
-        // Ghost-recheck only makes sense when the server has FEWER live messages
-        // than we expect locally — that's the signal that some of our UIDs were
-        // expunged. `serverCount > expectedCount` is just an incomplete backfill
-        // (Gmail All Mail 135k server vs 29k local): the backfill loop below
-        // will close that gap; enumerating live UIDs would be wasted bandwidth.
-        // Even when warranted, bound the FETCH to the local UID window —
-        // UIDs above maxLocal can't be ghosts (we don't have them), UIDs below
-        // minLocal weren't backfilled yet either. Thunderbird's parity is
-        // `UID FETCH 1:* (FLAGS) (CHANGEDSINCE <modseq>)`
-        // (`nsImapProtocol::ProcessMailboxUpdate`, nsImapProtocol.cpp:4258-4271);
-        // we can't use CHANGEDSINCE here because we need every live UID, not
-        // just changed ones — bounding by min/max localUID is the equivalent
-        // bandwidth saving.
-        if serverCount < expectedCount,
+        // Ghost-recheck makes sense when the server has FEWER live messages than
+        // we expect locally — the signal that some of our UIDs were expunged.
+        // `serverCount > expectedCount` is just an incomplete backfill (Gmail All
+        // Mail 135k server vs 29k local): the backfill loop below closes that gap.
+        //
+        // §13: EXISTS (`serverCount`) counts \Deleted-but-not-expunged messages,
+        // so on mark-deleted servers it stays inflated and hides a real shrink —
+        // `serverCount < expectedCount` falsely reads false and the recheck is
+        // skipped. When we have pending deletes in THIS folder (the mark-deleted
+        // scenario we can detect cheaply), force the recheck even if EXISTS
+        // doesn't show a drop. The FETCH is bounded to the local UID window, so
+        // this only costs bandwidth on user-initiated deletes, never on Gmail's
+        // huge incomplete-backfill folders.
+        let forceGhostRecheck = pendingDeleteCount > 0
+        if (serverCount < expectedCount || forceGhostRecheck),
            let minLocalUID = localUIDs.min(),
            let maxLocalUID = localUIDs.max() {
             LogService.log(.info, .sync, "sync path: ghost-recheck",
@@ -528,7 +597,8 @@ extension SyncService {
             for entry in entries where !entry.flags.contains(.deleted) {
                 serverUIDs.insert(entry.uid)
             }
-            ghostUIDs = localUIDs.subtracting(serverUIDs).subtracting(pendingSourceUIDs)
+            ghostUIDs = localUIDs.subtracting(serverUIDs)
+                .subtracting(pendingSourceUIDs).subtracting(pendingTargetUIDs)
         }
 
         if !ghostUIDs.isEmpty {
@@ -600,6 +670,7 @@ extension SyncService {
         imap: IMAPService, saved: Folder, sel: Mailbox.Selection,
         localUIDs: Set<UInt32>,
         pendingSourceUIDs: Set<UInt32>,
+        pendingTargetUIDs: Set<UInt32>,
         highestKnownUid: UInt32
     ) async throws {
         LogService.log(.info, .sync, "sync path: legacy-search", detail: folderPath)
@@ -659,7 +730,8 @@ extension SyncService {
 
         // 5c: Ghost UIDs — local UIDs absent on server within the window.
         // Exclude UIDs with pending move/delete actions (expected to be missing).
-        let ghostUIDs = localUIDs.subtracting(serverUIDs).subtracting(pendingSourceUIDs)
+        let ghostUIDs = localUIDs.subtracting(serverUIDs)
+            .subtracting(pendingSourceUIDs).subtracting(pendingTargetUIDs)
         if !ghostUIDs.isEmpty {
             let ghosts = ghostUIDs
             try await pool.write { db in
@@ -1073,15 +1145,23 @@ extension SyncService {
     ) async {
         var serverFlagMap: [UInt32: Set<String>] = [:]
         for (uid, flags) in allFlags {
-            serverFlagMap[uid] = Set(flags.map(\.description))
+            // RFC 3501: flag atoms are case-insensitive. `.description` lowercases
+            // system flags but keeps custom keyword case ($Forwarded vs
+            // $forwarded) — lowercase the whole set so keyword comparisons below
+            // are case-insensitive (§10).
+            serverFlagMap[uid] = Set(flags.map { $0.description.lowercased() })
         }
 
-        let cooldownIDs: Set<UUID> = Set(
-            recentMutationStore.keys.filter { isInCooldown($0) }
-        )
-
+        // §12 (bug 9.10): snapshot the mutation timestamps as the LAST thing
+        // before the write (no await between this and pool.write) and evaluate
+        // the cooldown window inside the transaction against `Date()` at write
+        // time. A pre-computed Set captured earlier could be stale by the time
+        // the write lands, letting stale server flags overwrite a fresh local
+        // mutation right at the 2s boundary.
+        let mutationSnapshot = recentMutationStore
         do {
             try await pool.write { db in
+                let writeNow = Date()
                 let rows = try Row.fetchAll(db, sql: """
                     SELECT uid, id, is_read, is_flagged, is_answered, is_forwarded, is_draft
                     FROM messages WHERE folder_id = ?
@@ -1091,7 +1171,8 @@ extension SyncService {
                     let uid: UInt32 = row["uid"]
                     let msgID: UUID = row["id"]
 
-                    if cooldownIDs.contains(msgID) { continue }
+                    if let mutatedAt = mutationSnapshot[msgID],
+                       writeNow.timeIntervalSince(mutatedAt) < 2.0 { continue }
                     guard let flagStrs = serverFlagMap[uid] else { continue }
 
                     let localRead: Bool = row["is_read"]
@@ -1103,7 +1184,7 @@ extension SyncService {
                     let serverRead = flagStrs.contains("seen")
                     let serverFlag = flagStrs.contains("flagged")
                     let serverAns = flagStrs.contains("answered")
-                    let serverFwd = flagStrs.contains("$Forwarded")
+                    let serverFwd = flagStrs.contains("$forwarded")
                     let serverDft = flagStrs.contains("draft")
 
                     if localRead != serverRead || localFlagged != serverFlag
@@ -1202,20 +1283,41 @@ extension SyncService {
                 return (byUID, byMID)
             }
 
-        let cooldownIDs: Set<UUID> = Set(existingByUID.values.filter { isInCooldown($0) })
+        // §12 (bug 9.10): snapshot mutation timestamps right before the write
+        // and evaluate the cooldown inside the transaction against write-time
+        // `Date()` — a Set captured earlier can go stale before the write lands.
+        let mutationSnapshot = recentMutationStore
+
+        // §11: dedup incoming infos by UID (keep last — most recent flags). A
+        // server that emits two FETCH lines for the same UID in one batch would
+        // otherwise trigger two INSERTs and a UNIQUE(folder_id,uid) violation
+        // that rolls back the entire chunk transaction.
+        var dedupedInfos: [MessageInfo] = []
+        var seenUIDs: Set<UInt32> = []
+        for info in infos.reversed() {
+            guard let uid = info.uid?.value else { dedupedInfos.append(info); continue }
+            if seenUIDs.insert(uid).inserted { dedupedInfos.append(info) }
+        }
+        dedupedInfos.reverse()
 
         try await pool.write { db in
-            for info in infos {
+            let writeNow = Date()
+            func inCooldown(_ id: UUID) -> Bool {
+                guard let at = mutationSnapshot[id] else { return false }
+                return writeNow.timeIntervalSince(at) < 2.0
+            }
+            for info in dedupedInfos {
                 guard let uid = info.uid else { continue }
-                let flagStrs = Set(info.flags.map(\.description))
+                // RFC 3501 case-insensitive flags (§10) — lowercase the set.
+                let flagStrs = Set(info.flags.map { $0.description.lowercased() })
                 let isRead = flagStrs.contains("seen")
                 let isFlagged = flagStrs.contains("flagged")
                 let isAnswered = flagStrs.contains("answered")
-                let isForwarded = flagStrs.contains("$Forwarded")
+                let isForwarded = flagStrs.contains("$forwarded")
                 let isDraft = flagStrs.contains("draft")
 
                 if let msgID = existingByUID[uid.value] {
-                    if !cooldownIDs.contains(msgID) {
+                    if !inCooldown(msgID) {
                         try db.execute(sql: """
                             UPDATE messages
                             SET is_read = ?, is_flagged = ?, is_answered = ?, is_forwarded = ?, is_draft = ?
@@ -1285,7 +1387,25 @@ extension SyncService {
                     listID: listID,
                     folderID: folderID, accountID: accountID
                 )
-                try msg.insert(db)
+                // §11: upsert on UNIQUE(folder_id, uid). A row may have appeared
+                // since the pre-write snapshot (concurrent sync/IDLE path); a
+                // plain INSERT would throw and roll back the whole chunk. Re-check
+                // liveness inside the transaction and UPDATE flags in place when
+                // the row already exists instead of inserting a duplicate.
+                let liveID: UUID? = try UUID.fetchOne(db, sql:
+                    "SELECT id FROM messages WHERE folder_id = ? AND uid = ?",
+                    arguments: [folderID, uid.value])
+                if liveID != nil {
+                    try db.execute(sql: """
+                        UPDATE messages
+                        SET is_read = ?, is_flagged = ?, is_answered = ?,
+                            is_forwarded = ?, is_draft = ?
+                        WHERE folder_id = ? AND uid = ?
+                        """, arguments: [isRead, isFlagged, isAnswered,
+                                         isForwarded, isDraft, folderID, uid.value])
+                } else {
+                    try msg.insert(db)
+                }
             }
         }
     }
@@ -1358,7 +1478,12 @@ extension SyncService {
     /// vertical centering even with `maximumNumberOfLines = 1` because the
     /// intrinsic content height is computed for two lines.
     nonisolated static func sanitizeSubject(_ raw: String?) -> String {
-        (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        // §22: drop ALL control characters (CR, LF, and anything < 0x20), not
+        // just leading/trailing whitespace. Inner CRLF smuggled via encoded-word
+        // would otherwise reach the header verbatim (hidden Bcc / header split).
+        let stripped = (raw ?? "").unicodeScalars.filter { $0.value >= 0x20 }
+        return String(String.UnicodeScalarView(stripped))
+            .trimmingCharacters(in: .whitespaces)
     }
 
     // MARK: - Thread-ID inheritance (Thunderbird §7.5, P2-T2)

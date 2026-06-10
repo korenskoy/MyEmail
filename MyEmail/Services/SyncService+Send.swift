@@ -23,6 +23,19 @@ extension SyncService {
         return "MyEmail/\(version) (macOS/\(arch))"
     }()
 
+    // MARK: - Header sanitization (§22)
+
+    /// Remove CR, LF, and other control chars (< 0x20) from a header value so a
+    /// crafted value can't inject additional headers into the serialized message.
+    nonisolated static func sanitizeHeaderValue(_ raw: String) -> String {
+        String(String.UnicodeScalarView(raw.unicodeScalars.filter { $0.value >= 0x20 }))
+    }
+
+    /// True if a string contains any control character (CR/LF/< 0x20).
+    nonisolated static func containsControlChars(_ s: String) -> Bool {
+        s.unicodeScalars.contains { $0.value < 0x20 }
+    }
+
     // MARK: - SMTP services
 
     private var smtpServices: [UUID: SMTPService] {
@@ -56,6 +69,13 @@ extension SyncService {
         let smtp = getOrCreateSMTPService(for: account)
         await wireSmtpTokenProvider(for: account, smtp: smtp)
 
+        // §22: reject recipient addresses carrying CR/LF — a smuggled newline
+        // would split the envelope and inject hidden recipients/headers.
+        if (to + cc + bcc + replyTo).contains(where: Self.containsControlChars) {
+            LogService.log(.error, .sync, "Send blocked — recipient contains control chars")
+            throw SyncServiceError.invalidRecipient
+        }
+
         // Standard headers matching RFC 2822 / Thunderbird conventions
         var headers: [String: String] = [:]
         headers["User-Agent"] = Self.userAgentString
@@ -66,15 +86,17 @@ extension SyncService {
         let messageIDValue = "<\(UUID().uuidString)@\(domain)>"
         headers["Message-ID"] = messageIDValue
 
-        // Threading headers for replies (RFC 2822 §3.6.4)
+        // Threading headers for replies (RFC 2822 §3.6.4). §22: strip control
+        // chars from every value so a crafted In-Reply-To/References/Reply-To
+        // can't inject extra headers (e.g. a hidden Bcc) into the serializer.
         if let replyID = inReplyTo, !replyID.isEmpty {
-            headers["In-Reply-To"] = replyID
+            headers["In-Reply-To"] = Self.sanitizeHeaderValue(replyID)
         }
         if !references.isEmpty {
-            headers["References"] = references.joined(separator: " ")
+            headers["References"] = Self.sanitizeHeaderValue(references.joined(separator: " "))
         }
         if !replyTo.isEmpty {
-            headers["Reply-To"] = replyTo.joined(separator: ", ")
+            headers["Reply-To"] = Self.sanitizeHeaderValue(replyTo.joined(separator: ", "))
         }
 
         var email = Email(
@@ -82,7 +104,7 @@ extension SyncService {
             recipients: to.map { EmailAddress(address: $0) },
             ccRecipients: cc.map { EmailAddress(address: $0) },
             bccRecipients: bcc.map { EmailAddress(address: $0) },
-            subject: subject,
+            subject: Self.sanitizeHeaderValue(subject),
             textBody: textBody,
             htmlBody: htmlBody,
             attachments: attachments

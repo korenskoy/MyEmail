@@ -306,6 +306,15 @@ extension IMAPService {
         return result.firstUID?.value
     }
 
+    /// IMAP APPEND raw RFC822 message as exact bytes — preserves 8-bit content
+    /// that doesn't round-trip through String. Returns new UID under UIDPLUS.
+    @discardableResult
+    func appendRawData(_ data: Data, to mailbox: String, flags: [Flag], date: Date?) async throws -> UInt32? {
+        let srv = try await requireServer()
+        let result = try await srv.append(rawData: data, to: mailbox, flags: flags, internalDate: date)
+        return result.firstUID?.value
+    }
+
     // MARK: - IDLE
 
     /// Legacy IDLE on the currently selected folder.

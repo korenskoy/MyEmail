@@ -41,9 +41,12 @@ struct KeychainService: Sendable {
         let base = baseQuery(for: account)
 
         // Update path first — if the item exists we atomically replace the value.
+        // §25: ...ThisDeviceOnly keeps rule-17 AfterFirstUnlock semantics (IDLE
+        // works on a locked machine) while preventing the credential from
+        // syncing to iCloud Keychain / other devices.
         let attrsToUpdate: [String: Any] = [
             kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
         let updateStatus = SecItemUpdate(base as CFDictionary, attrsToUpdate as CFDictionary)
 
@@ -59,7 +62,7 @@ struct KeychainService: Sendable {
 
         var addQuery = base
         addQuery[kSecValueData as String] = data
-        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 
         let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
         switch addStatus {

@@ -39,6 +39,15 @@ final class OAuthCallbackBroker {
 
     private init() {}
 
+    /// §23: scheme+path only — strips the OAuth `code`/`state` query so the
+    /// callback URL can be logged without leaking the authorization grant.
+    nonisolated static func redactedURL(_ url: URL) -> String {
+        var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        comps?.query = nil
+        comps?.fragment = nil
+        return comps?.string ?? "\(url.scheme ?? "")://\(url.path)"
+    }
+
     // MARK: - Waiter side (AuthService)
 
     /// Приостанавливает поток до прихода callback URL с матчинг-state.
@@ -82,11 +91,13 @@ final class OAuthCallbackBroker {
     /// но браузер уже успел редиректить — такие случаи не должны крашить
     /// приложение).
     func deliver(_ url: URL) {
+        // §23: never log the raw callback URL — it carries the OAuth `code` and
+        // `state` in the query. Log scheme+path only.
         LogService.shared.log(
             .info,
             .auth,
             "OAuth callback received",
-            detail: url.absoluteString
+            detail: Self.redactedURL(url)
         )
 
         guard let continuation else {
@@ -94,7 +105,7 @@ final class OAuthCallbackBroker {
                 .warning,
                 .auth,
                 "OAuth callback but no waiter — ignoring",
-                detail: url.absoluteString
+                detail: Self.redactedURL(url)
             )
             return
         }

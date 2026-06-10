@@ -52,6 +52,19 @@ extension AuthService {
                                detail: "account=\(accountID) reason=\(reason)")
                 return
             }
+
+            // (2c) Attempt-backoff (§18). A FAILED refresh doesn't advance
+            //      lastRefreshAt, so without this a stable network error or
+            //      transient 5xx lets every lazy caller re-hit the grant endpoint
+            //      immediately (retry-storm). Back off non-forced callers for
+            //      minRefreshInterval after any attempt. Forced (reactive 401)
+            //      callers still bypass — the server actually rejected the token.
+            if let lastAttempt = lastRefreshAttemptAt[accountID],
+               Date().timeIntervalSince(lastAttempt) < AuthConstants.minRefreshInterval {
+                LogService.log(.debug, .auth, "Refresh skipped (attempt backoff)",
+                               detail: "account=\(accountID) reason=\(reason)")
+                return
+            }
         }
 
         let task = Task { [self] in
@@ -71,6 +84,11 @@ extension AuthService {
     }
 
     private func performRefresh(accountID: UUID, reason: String) async throws {
+        // §18: record the attempt up front so a failure path (invalid_grant,
+        // network error, 5xx) still arms the attempt-backoff. lastRefreshAt is
+        // set only on success below, preserving the rule-15 success cooldown.
+        lastRefreshAttemptAt[accountID] = Date()
+
         let refreshToken: String
         do {
             refreshToken = try keychain.oauthRefreshToken(for: accountID)
@@ -185,6 +203,7 @@ extension AuthService {
         // long-lived token isn't suppressed by the dead token's timers.
         proactiveBackoffUntil.removeValue(forKey: accountID)
         lastRefreshAt.removeValue(forKey: accountID)
+        lastRefreshAttemptAt.removeValue(forKey: accountID)
         try accountRepository.setAuthState(.ok, for: accountID)
         LogService.log(.info, .auth, "Re-authenticated \(email)")
     }

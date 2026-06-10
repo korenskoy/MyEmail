@@ -12,6 +12,7 @@
 
 import Foundation
 import GRDB
+import Network
 import Observation
 import SwiftMail
 
@@ -101,12 +102,23 @@ final class SyncService {
     /// IDLE pushes similarly — RFC 2177 itself does not mandate this.
     var lastExistsCount: [UUID: Int] = [:]
 
-    /// Active IDLE tasks keyed by folder path. Allows multi-folder push
-    /// notifications (Pattern #3). Default idle folders: INBOX.
+    /// Active IDLE tasks keyed by "accountID:folderPath". Allows multi-folder
+    /// push notifications (Pattern #3). Default idle folders: INBOX.
     var idleTasks: [String: Task<Void, Never>] = [:]
+
+    /// IDLE key ("accountID:folderPath") of the currently user-selected
+    /// non-INBOX folder. §14/rule 20: only the selected non-INBOX folder gets a
+    /// dedicated IDLE session; on selection change the previous one is stopped so
+    /// IDLE connections don't accumulate past the Gmail ~15-connection limit.
+    var selectedIdleKey: String?
 
     /// Periodic sync timer (stored MainActor property — §8.3)
     var periodicSyncTimer: Timer?
+
+    /// Network path monitor (stored MainActor property — rule 3). Held so the
+    /// monitor isn't a transient local that could be released while its
+    /// pathUpdateHandler is still scheduled.
+    var pathMonitor: NWPathMonitor?
 
     /// NSWorkspace.didWakeNotification observer. Triggers an immediate STATUS
     /// sweep when the Mac wakes from sleep — `Timer.scheduledTimer` halts
@@ -141,6 +153,12 @@ final class SyncService {
     /// first task instead of racing a duplicate IMAP session.
     @discardableResult
     func syncAccount(_ account: Account, retryAfterRefresh: Bool = true) async -> Folder? {
+        // §18: a needsReauth account has a dead token — syncing would trigger a
+        // lazy refresh that floods the grant endpoint. Skip until re-auth.
+        if account.authState == .needsReauth {
+            LogService.log(.debug, .sync, "syncAccount skipped (needsReauth)", detail: account.email)
+            return nil
+        }
         if let existing = runningSyncs[account.id] {
             LogService.log(.debug, .sync, "syncAccount coalesced", detail: account.email)
             return await existing.value
@@ -378,6 +396,11 @@ final class SyncService {
         }
 
         for account in accounts {
+            // §18: skip accounts already flagged needsReauth — their token is
+            // dead and every sync attempt would trigger a lazy refresh that
+            // hammers the grant endpoint (retry-storm). They recover only via
+            // explicit re-auth (orange banner → refreshViaOAuth).
+            if account.authState == .needsReauth { continue }
             await syncAccount(account)
         }
     }
@@ -581,6 +604,8 @@ final class SyncService {
 
     enum SyncServiceError: Error {
         case serialQueueFailure
+        /// §22: a recipient address contained CR/LF — rejected before send.
+        case invalidRecipient
     }
 
     func disconnectAll() async {
@@ -599,9 +624,14 @@ final class SyncService {
     /// by folder path (not account ID) and paths can collide across accounts
     /// ("INBOX"), so we cancel all IDLE sessions — remaining accounts re-IDLE
     /// on their next sync cycle.
-    func removeAccount(id: UUID) async {
+    ///
+    /// `folderIDs` must be captured by the caller BEFORE deleting the account
+    /// rows (the folders are gone from the DB by the time this runs), so the
+    /// folder-keyed in-memory caches can be purged (§28).
+    func removeAccount(id: UUID, folderIDs: [UUID] = []) async {
         for (_, task) in idleTasks { task.cancel() }
         idleTasks.removeAll()
+        selectedIdleKey = nil
 
         if let imap = imapServices.removeValue(forKey: id) {
             await imap.disconnect()
@@ -614,5 +644,18 @@ final class SyncService {
         // Cancel any running syncs for this account
         runningSyncs[id]?.cancel()
         runningSyncs.removeValue(forKey: id)
+
+        // §28: purge per-account serial tails and folder-keyed caches so a
+        // re-added account (same or recycled IDs) doesn't inherit stale state.
+        accountSerialTail[id]?.cancel()
+        accountSerialTail.removeValue(forKey: id)
+        accountCommandSerialTail[id]?.cancel()
+        accountCommandSerialTail.removeValue(forKey: id)
+        for fid in folderIDs {
+            lastExistsCount.removeValue(forKey: fid)
+            pendingIdleEvents.removeValue(forKey: fid)
+            syncingFolders.remove(fid)
+            bulkOpFolderIDs.remove(fid)
+        }
     }
 }

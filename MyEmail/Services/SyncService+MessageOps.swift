@@ -39,6 +39,14 @@ extension SyncService {
         return false
     }
 
+    /// §27: drop expired cooldown entries. `isInCooldown` only prunes the keys it
+    /// happens to be asked about, so a bulk op (10k UUIDs) leaves 10k stale
+    /// entries until restart. Called periodically from the sync timer.
+    func pruneExpiredMutations() {
+        let now = Date()
+        recentMutationStore = recentMutationStore.filter { now.timeIntervalSince($0.value) < 2.0 }
+    }
+
     // MARK: - Interaction score (notability for search ranking)
 
     /// Atomically bump interaction_score for one or more messages. Used by
@@ -122,115 +130,179 @@ extension SyncService {
 
     // MARK: - Same-account IMAP MOVE
 
-    private func sameAccountMove(ctx: MoveContext, targetFolderID: UUID) async {
-        let uids = ctx.messages.map(\.uid)
+    /// One source-folder's worth of messages moving to the same target.
+    private struct MoveSourceGroup: Sendable {
+        let sourceFolderID: UUID
+        let sourceFolderPath: String
+        let sourceUidValidity: UInt32?
+        let messageIDs: [UUID]
+        let uids: [UInt32]
+    }
 
-        // IDLE gate (§9.14): prevent IDLE reconcile during bulk move
-        let sourceFolderID = ctx.sourceFolder.id
-        bulkOpFolderIDs.insert(sourceFolderID)
-        bulkOpFolderIDs.insert(targetFolderID)
+    private func sameAccountMove(ctx: MoveContext, targetFolderID: UUID) async {
+        // §9.1: messages in a single move may originate from different source
+        // folders (multi-select across a search result or the Unified Inbox).
+        // Group by source folder so each MOVE SELECTs the right mailbox and
+        // applies only that folder's UIDs — never the first folder's UIDs to
+        // everyone (which would MOVE/lose foreign UIDs on the server).
+        let groups: [MoveSourceGroup] = (try? await pool.read { db -> [MoveSourceGroup] in
+            let bySource = Dictionary(grouping: ctx.messages, by: \.folderID)
+            return try bySource.compactMap { folderID, msgs -> MoveSourceGroup? in
+                guard let folder = try Folder.fetchOne(db, key: folderID) else { return nil }
+                return MoveSourceGroup(
+                    sourceFolderID: folderID,
+                    sourceFolderPath: folder.path,
+                    sourceUidValidity: folder.uidValidity,
+                    messageIDs: msgs.map(\.id),
+                    uids: msgs.map(\.uid)
+                )
+            }
+        }) ?? []
+        guard !groups.isEmpty else { return }
+
+        // IDLE gate (§9.14): cover every source folder + target during bulk move
+        let gatedFolderIDs = Set(groups.map(\.sourceFolderID)).union([targetFolderID])
+        for fid in gatedFolderIDs { bulkOpFolderIDs.insert(fid) }
         defer {
-            bulkOpFolderIDs.remove(sourceFolderID)
-            bulkOpFolderIDs.remove(targetFolderID)
+            for fid in gatedFolderIDs { bulkOpFolderIDs.remove(fid) }
             Task { [weak self] in
-                await self?.drainPendingIdleEvents(for: sourceFolderID)
-                await self?.drainPendingIdleEvents(for: targetFolderID)
+                for fid in gatedFolderIDs { await self?.drainPendingIdleEvents(for: fid) }
             }
         }
 
-        // Optimistic local update
-        let ids = ctx.messages.map(\.id)
+        // Optimistic local update — all selected rows point at the target now.
+        let allIDs = groups.flatMap(\.messageIDs)
         try? await pool.write { db in
-            let placeholders = ids.map { _ in "?" }.joined(separator: ",")
+            let placeholders = allIDs.map { _ in "?" }.joined(separator: ",")
             try db.execute(
                 sql: "UPDATE messages SET folder_id = ? WHERE id IN (\(placeholders))",
-                arguments: StatementArguments([targetFolderID] + ids)
+                arguments: StatementArguments([targetFolderID] + allIDs)
             )
         }
 
-        let imap = getOrCreateIMAPService(for: ctx.sourceAccount)
-        do {
-            if await !imap.isConnected { try await imap.connect() }
-            _ = try await imap.selectFolder(ctx.sourceFolder.path)
-            try await imap.moveMessages(uids: uids, to: ctx.targetFolder.path)
+        let account = ctx.sourceAccount
+        let targetPath = ctx.targetFolder.path
+        // §9.5: serialize the whole IMAP section on the per-account socket so a
+        // concurrent sync/IDLE flow can't interleave SELECT A → SELECT B →
+        // MOVE-in-B. NOT reentrant — only top-level entry points wrap.
+        try? await runSerializedPerAccount(account.id) { [weak self] in
+            guard let self else { return }
+            let imap = self.getOrCreateIMAPService(for: account)
+            for group in groups {
+                do {
+                    if await !imap.isConnected { try await imap.connect() }
+                    _ = try await imap.selectFolder(group.sourceFolderPath)
+                    try await imap.moveMessages(uids: group.uids, to: targetPath)
+                } catch {
+                    for uid in group.uids {
+                        let action = PendingAction(
+                            id: UUID(), type: .move, accountID: account.id,
+                            sourceFolderPath: group.sourceFolderPath,
+                            targetFolderPath: targetPath,
+                            messageUID: uid, sourceUidValidity: group.sourceUidValidity,
+                            payload: nil, status: .pending,
+                            attemptCount: 0, lastError: nil, createdAt: Date()
+                        )
+                        try? await self.offlineQueue?.enqueue(action)
+                    }
+                    LogService.log(.warning, .sync, "Move queued for retry", detail: "\(error)")
+                }
+            }
+        }
 
-            // Thunderbird parity (nsImapUndoTxn.cpp:349-410): after a successful
-            // MOVE the optimistic rows still carry source-folder UIDs under the
-            // target folder_id. Kick a target-folder resync so the server-
-            // assigned UIDs come in via QRESYNC/CONDSTORE delta; persistHeaders
-            // reconciles them in place via Message-ID. Without this, the
-            // placeholder UIDs survive until the next lazy select.
-            Task { [weak self] in
-                await self?.syncFolderIfNeeded(folderID: targetFolderID)
-            }
-        } catch {
-            for uid in uids {
-                let action = PendingAction(
-                    id: UUID(), type: .move, accountID: ctx.sourceAccount.id,
-                    sourceFolderPath: ctx.sourceFolder.path,
-                    targetFolderPath: ctx.targetFolder.path,
-                    messageUID: uid, sourceUidValidity: ctx.sourceFolder.uidValidity,
-                    payload: nil, status: .pending,
-                    attemptCount: 0, lastError: nil, createdAt: Date()
-                )
-                try? await offlineQueue?.enqueue(action)
-            }
-            LogService.log(.warning, .sync, "Move queued for retry", detail: "\(error)")
+        // Thunderbird parity (nsImapUndoTxn.cpp:349-410): optimistic rows still
+        // carry source UIDs under the target folder_id; resync target so server-
+        // assigned UIDs arrive via QRESYNC/CONDSTORE and persistHeaders matches
+        // them in place by Message-ID.
+        Task { [weak self] in
+            await self?.syncFolderIfNeeded(folderID: targetFolderID)
         }
     }
 
     // MARK: - Cross-account move (FETCH raw → APPEND → DELETE)
 
     private func crossAccountMove(ctx: MoveContext, targetFolderID: UUID) async {
-        let srcImap = getOrCreateIMAPService(for: ctx.sourceAccount)
-        let dstImap = getOrCreateIMAPService(for: ctx.targetAccount)
+        let sourceAccount = ctx.sourceAccount
+        let targetAccount = ctx.targetAccount
+        let sourcePath = ctx.sourceFolder.path
+        let targetPath = ctx.targetFolder.path
+        let sourceUidValidity = ctx.sourceFolder.uidValidity
+        let messages = ctx.messages
 
-        do {
-            if await !srcImap.isConnected {
-                await wireTokenProvider(for: ctx.sourceAccount, imap: srcImap)
-                try await srcImap.connect()
-            }
-            if await !dstImap.isConnected {
-                await wireTokenProvider(for: ctx.targetAccount, imap: dstImap)
-                try await dstImap.connect()
-            }
-            _ = try await srcImap.selectFolder(ctx.sourceFolder.path)
-
-            for msg in ctx.messages {
-                // 1. FETCH raw
-                let rawData = try await srcImap.fetchRawMessage(uid: msg.uid)
-                guard let raw = String(data: rawData, encoding: .utf8)
-                        ?? String(data: rawData, encoding: .ascii) else { continue }
-
-                // 2. Build flags (preserve all RFC 3501 + keyword flags)
-                var flags: [Flag] = []
-                if msg.isRead { flags.append(.seen) }
-                if msg.isFlagged { flags.append(.flagged) }
-                if msg.isAnswered { flags.append(.answered) }
-                if msg.isDraft { flags.append(.draft) }
-                if msg.isForwarded { flags.append(.custom("$Forwarded")) }
-
-                // 3. APPEND to destination
-                try await dstImap.appendRawMessage(
-                    raw, to: ctx.targetFolder.path, flags: flags, date: msg.date
-                )
-
-                // 4. DELETE from source
-                try await srcImap.deleteMessages(uids: [msg.uid])
-
-                // 5. Local cleanup
-                try? await pool.write { db in
-                    try db.execute(
-                        sql: "DELETE FROM messages WHERE id = ?",
-                        arguments: [msg.id]
-                    )
+        // §9.5: serialize source-account IMAP work on its socket so a concurrent
+        // sync/IDLE flow can't interleave SELECT/DELETE on the source.
+        try? await runSerializedPerAccount(sourceAccount.id) { [weak self] in
+            guard let self else { return }
+            let srcImap = self.getOrCreateIMAPService(for: sourceAccount)
+            let dstImap = self.getOrCreateIMAPService(for: targetAccount)
+            do {
+                if await !srcImap.isConnected {
+                    await self.wireTokenProvider(for: sourceAccount, imap: srcImap)
+                    try await srcImap.connect()
                 }
-            }
+                if await !dstImap.isConnected {
+                    await self.wireTokenProvider(for: targetAccount, imap: dstImap)
+                    try await dstImap.connect()
+                }
+                _ = try await srcImap.selectFolder(sourcePath)
 
-            LogService.log(.info, .sync, "Cross-account move: \(ctx.messages.count) messages",
-                           detail: "\(ctx.sourceAccount.email) → \(ctx.targetAccount.email)")
-        } catch {
-            LogService.log(.error, .sync, "Cross-account move failed", detail: "\(error)")
+                for msg in messages {
+                    // Phase 1 — copy to target (FETCH + APPEND). On failure
+                    // nothing reached the target: leave the source untouched and
+                    // skip (queuing `.move` would replay as a same-account MOVE
+                    // on the source into a foreign path).
+                    do {
+                        let rawData = try await srcImap.fetchRawMessage(uid: msg.uid)
+                        var flags: [Flag] = []  // preserve all RFC 3501 + keyword flags
+                        if msg.isRead { flags.append(.seen) }
+                        if msg.isFlagged { flags.append(.flagged) }
+                        if msg.isAnswered { flags.append(.answered) }
+                        if msg.isDraft { flags.append(.draft) }
+                        if msg.isForwarded { flags.append(.custom("$Forwarded")) }
+
+                        // APPEND to destination as exact bytes (8-bit safe).
+                        try await dstImap.appendRawData(
+                            rawData, to: targetPath, flags: flags, date: msg.date
+                        )
+                    } catch {
+                        LogService.log(.warning, .sync,
+                            "Cross-account move: copy failed, left in place",
+                            detail: "uid=\(msg.uid) \(error)")
+                        continue
+                    }
+
+                    // Phase 2 — APPEND confirmed; only the source delete remains.
+                    // Queue `.delete` (NOT `.move`: re-APPEND would duplicate the
+                    // target). Idempotent on the source; local row dropped
+                    // optimistically, reconcile missing-recovery covers a
+                    // permanent delete failure.
+                    do {
+                        try await srcImap.deleteMessages(uids: [msg.uid])
+                    } catch {
+                        let action = PendingAction(
+                            id: UUID(), type: .delete, accountID: sourceAccount.id,
+                            sourceFolderPath: sourcePath, targetFolderPath: nil,
+                            messageUID: msg.uid, sourceUidValidity: sourceUidValidity,
+                            payload: nil, status: .pending,
+                            attemptCount: 0, lastError: nil, createdAt: Date()
+                        )
+                        try? await self.offlineQueue?.enqueue(action)
+                        LogService.log(.warning, .sync,
+                            "Cross-account move: source delete queued",
+                            detail: "uid=\(msg.uid) \(error)")
+                    }
+
+                    // Local cleanup (optimistic — the copy is in target).
+                    try? await self.pool.write { db in
+                        try db.execute(sql: "DELETE FROM messages WHERE id = ?", arguments: [msg.id])
+                    }
+                }
+
+                LogService.log(.info, .sync, "Cross-account move: \(messages.count) messages",
+                               detail: "\(sourceAccount.email) → \(targetAccount.email)")
+            } catch {
+                LogService.log(.error, .sync, "Cross-account move failed", detail: "\(error)")
+            }
         }
     }
 
@@ -293,50 +365,78 @@ extension SyncService {
     func expungeMessages(_ messageIDs: [UUID]) async {
         guard !messageIDs.isEmpty else { return }
 
-        let context = try? await pool.read { db -> (UUID, String, UUID, [UInt32], UInt32?)? in
+        // §9.1: a selection can span folders/accounts — group so each EXPUNGE
+        // SELECTs the right mailbox and only deletes that folder's UIDs.
+        struct ExpungeGroup: Sendable {
+            let accountID: UUID
+            let folderID: UUID
+            let folderPath: String
+            let uidValidity: UInt32?
+            let messageIDs: [UUID]
+            let uids: [UInt32]
+        }
+
+        let groups: [ExpungeGroup] = (try? await pool.read { db -> [ExpungeGroup] in
             let messages = try Message
                 .filter(messageIDs.contains(Column("id")))
                 .fetchAll(db)
-            guard let first = messages.first,
-                  let folder = try Folder.fetchOne(db, key: first.folderID) else { return nil }
-            return (folder.id, folder.path, first.accountID, messages.map(\.uid), folder.uidValidity)
-        }
+            let byFolder = Dictionary(grouping: messages, by: \.folderID)
+            return try byFolder.compactMap { folderID, msgs -> ExpungeGroup? in
+                guard let folder = try Folder.fetchOne(db, key: folderID),
+                      let first = msgs.first else { return nil }
+                return ExpungeGroup(
+                    accountID: first.accountID, folderID: folderID,
+                    folderPath: folder.path, uidValidity: folder.uidValidity,
+                    messageIDs: msgs.map(\.id), uids: msgs.map(\.uid)
+                )
+            }
+        }) ?? []
+        guard !groups.isEmpty else { return }
 
-        guard let (folderID, folderPath, accountID, uids, uidValidity) = context else { return }
-
-        // IDLE gate (§9.14): prevent IDLE reconcile during bulk expunge
-        bulkOpFolderIDs.insert(folderID)
+        // IDLE gate (§9.14): cover every affected folder.
+        let gatedFolderIDs = Set(groups.map(\.folderID))
+        for fid in gatedFolderIDs { bulkOpFolderIDs.insert(fid) }
         defer {
-            bulkOpFolderIDs.remove(folderID)
+            for fid in gatedFolderIDs { bulkOpFolderIDs.remove(fid) }
             Task { [weak self] in
-                await self?.drainPendingIdleEvents(for: folderID)
+                for fid in gatedFolderIDs { await self?.drainPendingIdleEvents(for: fid) }
             }
         }
 
-        // Optimistic: drop locally
+        // Optimistic: drop locally (all groups at once).
         try? await pool.write { db in
             try Message.filter(messageIDs.contains(Column("id"))).deleteAll(db)
         }
 
-        guard let account = try? await pool.read({ db in try Account.fetchOne(db, key: accountID) }) else { return }
-        let imap = getOrCreateIMAPService(for: account)
-
-        do {
-            if await !imap.isConnected { try await imap.connect() }
-            _ = try await imap.selectFolder(folderPath)
-            try await imap.deleteMessages(uids: uids)
-        } catch {
-            for uid in uids {
-                let action = PendingAction(
-                    id: UUID(), type: .delete, accountID: accountID,
-                    sourceFolderPath: folderPath, targetFolderPath: nil,
-                    messageUID: uid, sourceUidValidity: uidValidity,
-                    payload: nil, status: .pending,
-                    attemptCount: 0, lastError: nil, createdAt: Date()
-                )
-                try? await offlineQueue?.enqueue(action)
+        // Group by account so the IMAP section is serialized per-account socket.
+        let byAccount = Dictionary(grouping: groups, by: \.accountID)
+        for (accountID, accountGroups) in byAccount {
+            guard let account = try? await pool.read({ db in
+                try Account.fetchOne(db, key: accountID)
+            }) else { continue }
+            try? await runSerializedPerAccount(accountID) { [weak self] in
+                guard let self else { return }
+                let imap = self.getOrCreateIMAPService(for: account)
+                for group in accountGroups {
+                    do {
+                        if await !imap.isConnected { try await imap.connect() }
+                        _ = try await imap.selectFolder(group.folderPath)
+                        try await imap.deleteMessages(uids: group.uids)
+                    } catch {
+                        for uid in group.uids {
+                            let action = PendingAction(
+                                id: UUID(), type: .delete, accountID: accountID,
+                                sourceFolderPath: group.folderPath, targetFolderPath: nil,
+                                messageUID: uid, sourceUidValidity: group.uidValidity,
+                                payload: nil, status: .pending,
+                                attemptCount: 0, lastError: nil, createdAt: Date()
+                            )
+                            try? await self.offlineQueue?.enqueue(action)
+                        }
+                        LogService.log(.warning, .sync, "Expunge queued for retry", detail: "\(error)")
+                    }
+                }
             }
-            LogService.log(.warning, .sync, "Expunge queued for retry", detail: "\(error)")
         }
     }
 
@@ -383,7 +483,7 @@ extension SyncService {
             }
 
             // Build per-account context with account, separator, existing paths
-            return try byAccount.compactMap { (accountID, entries) -> ArchiveAccountContext? in
+            return try byAccount.compactMap { accountID, entries -> ArchiveAccountContext? in
                 guard let account = try Account.fetchOne(db, key: accountID) else { return nil }
                 let sep = try String.fetchOne(db, sql:
                     "SELECT separator FROM folders WHERE account_id = ? LIMIT 1",
@@ -424,68 +524,108 @@ extension SyncService {
         }
 
         for ctx in accountContexts {
-            let account = ctx.account
-            let imap = getOrCreateIMAPService(for: account)
-            await wireTokenProvider(for: account, imap: imap)
+            await archiveAccount(ctx: ctx)
+        }
+    }
 
-            // Optimistic local delete BEFORE network — UI reflects archive instantly.
-            // IMAP operations below will either finish the server-side move, or
-            // enqueue a retry in the offline queue if they fail.
-            let allMsgIDs = ctx.entries.map(\.messageID)
-            _ = try? await pool.write { db in
-                try Message.filter(allMsgIDs.contains(Column("id"))).deleteAll(db)
+    /// Archive one account's entries. Optimistic local delete already done by
+    /// the IDLE-gate setup in `archiveMessages`. §9.5: IMAP section runs under
+    /// the per-account serial lock.
+    private func archiveAccount(ctx: ArchiveAccountContext) async {
+        let account = ctx.account
+        await wireTokenProvider(for: account, imap: getOrCreateIMAPService(for: account))
+
+        // Optimistic local delete BEFORE network — UI reflects archive instantly.
+        let allMsgIDs = ctx.entries.map(\.messageID)
+        _ = try? await pool.write { db in
+            try Message.filter(allMsgIDs.contains(Column("id"))).deleteAll(db)
+        }
+
+        // §7: pre-resolve the DB archive special-use path for the SwiftMail
+        // auto-resolve case so a failed archive never queues a MOVE to "".
+        var archiveSpecialPath: String?
+        if account.archiveRootPath == nil {
+            archiveSpecialPath = try? await pool.read { db in
+                try String.fetchOne(db, sql:
+                    "SELECT path FROM folders WHERE account_id = ? AND special_use = ? LIMIT 1",
+                    arguments: [account.id, SpecialUse.archive.rawValue])
             }
+        }
 
+        try? await runSerializedPerAccount(account.id) { [weak self] in
+            guard let self else { return }
+            let imap = self.getOrCreateIMAPService(for: account)
             do {
                 if await !imap.isConnected { try await imap.connect() }
-
                 if let archiveRoot = account.archiveRootPath {
-                    // Explicit archive path configured — use subdivision logic
-                    try await archiveWithSubdivision(
+                    try await self.archiveWithSubdivision(
                         ctx: ctx, archiveRoot: archiveRoot, imap: imap
                     )
                 } else {
-                    // No explicit path — delegate to SwiftMail's built-in archive
-                    // (resolves via SPECIAL-USE \Archive or name fallback e.g. [Gmail]/All Mail)
-                    try await archiveViaSwiftMail(ctx: ctx, imap: imap)
+                    // No explicit path — SwiftMail resolves via SPECIAL-USE
+                    // \Archive or name fallback (e.g. [Gmail]/All Mail).
+                    try await self.archiveViaSwiftMail(ctx: ctx, imap: imap)
                 }
-
-                try await syncFolders(account: account, imap: imap)
+                try await self.syncFolders(account: account, imap: imap)
                 LogService.log(.info, .sync, "Archive complete",
                                detail: "\(account.email): \(allMsgIDs.count) message(s)")
             } catch {
-                // Look up uidValidity per source folder for offline queue
-                let uidValidityByPath: [String: UInt32] = (try? await pool.read { db in
-                    let paths = Set(ctx.entries.map(\.sourceFolderPath))
-                    var map: [String: UInt32] = [:]
-                    for path in paths {
-                        if let uv = try UInt32.fetchOne(db, sql:
-                            "SELECT uid_validity FROM folders WHERE account_id = ? AND path = ?",
-                            arguments: [account.id, path]) {
-                            map[path] = uv
-                        }
-                    }
-                    return map
-                }) ?? [:]
-
-                for entry in ctx.entries {
-                    let target = account.archiveRootPath ?? ""
-                    let action = PendingAction(
-                        id: UUID(), type: .archive, accountID: account.id,
-                        sourceFolderPath: entry.sourceFolderPath,
-                        targetFolderPath: target,
-                        messageUID: entry.uid,
-                        sourceUidValidity: uidValidityByPath[entry.sourceFolderPath],
-                        payload: nil,
-                        status: .pending, attemptCount: 0,
-                        lastError: nil, createdAt: Date()
-                    )
-                    try? await offlineQueue?.enqueue(action)
-                }
-                LogService.log(.warning, .sync,
-                    "Archive queued for retry", detail: "\(error)")
+                await self.enqueueArchiveRetry(
+                    ctx: ctx, archiveSpecialPath: archiveSpecialPath, error: error
+                )
             }
         }
+    }
+
+    /// Enqueue per-entry archive retries with a concrete, non-empty target path
+    /// resolved at enqueue time (§7). Entries with no resolvable target are
+    /// dropped with an error log rather than queuing a destructive MOVE to "".
+    private func enqueueArchiveRetry(
+        ctx: ArchiveAccountContext, archiveSpecialPath: String?, error: Error
+    ) async {
+        let account = ctx.account
+        let uidValidityByPath: [String: UInt32] = (try? await pool.read { db in
+            let paths = Set(ctx.entries.map(\.sourceFolderPath))
+            var map: [String: UInt32] = [:]
+            for path in paths {
+                if let uv = try UInt32.fetchOne(db, sql:
+                    "SELECT uid_validity FROM folders WHERE account_id = ? AND path = ?",
+                    arguments: [account.id, path]) {
+                    map[path] = uv
+                }
+            }
+            return map
+        }) ?? [:]
+
+        for entry in ctx.entries {
+            let target: String?
+            if let root = account.archiveRootPath {
+                let subdivision: ArchiveSubdivision = root.hasPrefix("[Gmail]")
+                    ? .flat : account.archiveSubdivision
+                target = subdivision.targetPath(
+                    for: entry.date, root: root, separator: ctx.separator
+                )
+            } else {
+                target = archiveSpecialPath
+            }
+            guard let target, !target.isEmpty else {
+                LogService.log(.error, .sync,
+                    "Archive retry not queued — no resolvable target",
+                    detail: "\(account.email) uid=\(entry.uid)")
+                continue
+            }
+            let action = PendingAction(
+                id: UUID(), type: .archive, accountID: account.id,
+                sourceFolderPath: entry.sourceFolderPath,
+                targetFolderPath: target,
+                messageUID: entry.uid,
+                sourceUidValidity: uidValidityByPath[entry.sourceFolderPath],
+                payload: nil, status: .pending, attemptCount: 0,
+                lastError: nil, createdAt: Date()
+            )
+            try? await offlineQueue?.enqueue(action)
+        }
+        LogService.log(.warning, .sync, "Archive queued for retry", detail: "\(error)")
     }
 
     /// Archive using SwiftMail's built-in archive() — resolves folder automatically.
@@ -548,14 +688,21 @@ extension SyncService {
 
     // MARK: - Core: executeOrQueue for flag operations
 
+    private struct FlagGroup: Sendable {
+        let accountID: UUID
+        let folderPath: String
+        let uidValidity: UInt32?
+        let uids: [UInt32]
+    }
+
     private func executeOrQueue(
         messageIDs: [UUID],
         flag: String,
         value: Bool,
-        imapOp: (IMAPService, [UInt32]) async throws -> Void,
+        imapOp: @escaping @Sendable (IMAPService, [UInt32]) async throws -> Void,
         actionType: PendingActionType
     ) async {
-        // Optimistic local mutation + cooldown
+        // Optimistic local mutation + cooldown (per-message, all folders).
         for id in messageIDs { recentMutationStore[id] = Date() }
 
         try? await pool.write { db in
@@ -565,37 +712,53 @@ extension SyncService {
                 """, arguments: StatementArguments([value] + messageIDs))
         }
 
-        // Resolve UIDs + account + uidValidity
-        let context = try? await pool.read { db -> ([UInt32], UUID, String, UInt32?)? in
+        // §9.1: group UIDs by (account, folder) so STORE targets the right
+        // mailbox — never the first message's folder for the whole selection.
+        let groups: [FlagGroup] = (try? await pool.read { db -> [FlagGroup] in
             let messages = try Message
                 .filter(messageIDs.contains(Column("id")))
                 .fetchAll(db)
-            guard let first = messages.first,
-                  let folder = try Folder.fetchOne(db, key: first.folderID) else { return nil }
-            return (messages.map(\.uid), first.accountID, folder.path, folder.uidValidity)
-        }
-
-        guard let (uids, accountID, folderPath, uidValidity) = context else { return }
-        guard let account = try? await pool.read({ db in try Account.fetchOne(db, key: accountID) }) else { return }
-
-        let imap = getOrCreateIMAPService(for: account)
-
-        do {
-            if await !imap.isConnected { try await imap.connect() }
-            _ = try await imap.selectFolder(folderPath)
-            try await imapOp(imap, uids)
-        } catch {
-            for uid in uids {
-                let action = PendingAction(
-                    id: UUID(), type: actionType, accountID: accountID,
-                    sourceFolderPath: folderPath, targetFolderPath: nil,
-                    messageUID: uid, sourceUidValidity: uidValidity,
-                    payload: nil, status: .pending,
-                    attemptCount: 0, lastError: nil, createdAt: Date()
+            let byFolder = Dictionary(grouping: messages, by: \.folderID)
+            return try byFolder.compactMap { folderID, msgs -> FlagGroup? in
+                guard let folder = try Folder.fetchOne(db, key: folderID),
+                      let first = msgs.first else { return nil }
+                return FlagGroup(
+                    accountID: first.accountID, folderPath: folder.path,
+                    uidValidity: folder.uidValidity, uids: msgs.map(\.uid)
                 )
-                try? await offlineQueue?.enqueue(action)
             }
-            LogService.log(.warning, .sync, "\(actionType.rawValue) queued", detail: "\(error)")
+        }) ?? []
+        guard !groups.isEmpty else { return }
+
+        let byAccount = Dictionary(grouping: groups, by: \.accountID)
+        for (accountID, accountGroups) in byAccount {
+            guard let account = try? await pool.read({ db in
+                try Account.fetchOne(db, key: accountID)
+            }) else { continue }
+            // §9.5: serialize STORE on the per-account socket.
+            try? await runSerializedPerAccount(accountID) { [weak self] in
+                guard let self else { return }
+                let imap = self.getOrCreateIMAPService(for: account)
+                for group in accountGroups {
+                    do {
+                        if await !imap.isConnected { try await imap.connect() }
+                        _ = try await imap.selectFolder(group.folderPath)
+                        try await imapOp(imap, group.uids)
+                    } catch {
+                        for uid in group.uids {
+                            let action = PendingAction(
+                                id: UUID(), type: actionType, accountID: accountID,
+                                sourceFolderPath: group.folderPath, targetFolderPath: nil,
+                                messageUID: uid, sourceUidValidity: group.uidValidity,
+                                payload: nil, status: .pending,
+                                attemptCount: 0, lastError: nil, createdAt: Date()
+                            )
+                            try? await self.offlineQueue?.enqueue(action)
+                        }
+                        LogService.log(.warning, .sync, "\(actionType.rawValue) queued", detail: "\(error)")
+                    }
+                }
+            }
         }
     }
 

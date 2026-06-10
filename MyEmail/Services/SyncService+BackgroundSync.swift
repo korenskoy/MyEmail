@@ -32,8 +32,11 @@ extension SyncService {
             try Folder.fetchOne(db, key: folderID)
         }) else { return }
 
-        // INBOX already has persistent IDLE — no-op
+        // INBOX already has persistent IDLE. Selecting it (or any inbox) means
+        // we're no longer looking at the previously-selected non-INBOX folder —
+        // tear its dedicated IDLE down so sessions don't pile up (rule 20).
         if let su = folder.specialUse, su == .inbox {
+            stopSelectedIdleIfNeeded(newKey: nil)
             return
         }
 
@@ -41,7 +44,25 @@ extension SyncService {
             try Account.fetchOne(db, key: folder.accountID)
         }) else { return }
 
+        // §14: only one selected-folder IDLE at a time. Stop the previous
+        // selection's IDLE before starting this one so dedicated IDLE sessions
+        // don't accumulate past the Gmail ~15-connection limit (rule 20).
+        let newKey = "\(account.id):\(folder.path)"
+        stopSelectedIdleIfNeeded(newKey: newKey)
+        selectedIdleKey = newKey
         ensureIDLE(account: account, folderPath: folder.path)
+    }
+
+    /// Stop the IDLE session for the previously-selected non-INBOX folder when
+    /// the selection changes. INBOX IDLE is persistent and never torn down here.
+    private func stopSelectedIdleIfNeeded(newKey: String?) {
+        guard let current = selectedIdleKey, current != newKey else { return }
+        if !current.hasSuffix(":INBOX") {
+            idleTasks[current]?.cancel()
+            idleTasks.removeValue(forKey: current)
+            LogService.log(.debug, .imap, "Stopped selected-folder IDLE", detail: current)
+        }
+        selectedIdleKey = nil
     }
 
     // MARK: - Pattern #2: Background prefetch
@@ -110,6 +131,9 @@ extension SyncService {
 
         for account in accounts {
             if Task.isCancelled { break }
+            // §18: skip needsReauth accounts — STATUS poll would connect and
+            // trigger a lazy token refresh that floods the grant endpoint.
+            if account.authState == .needsReauth { continue }
             await pollFolderStatuses(for: account)
         }
     }
@@ -193,14 +217,21 @@ extension SyncService {
         let savedUidNext = folder.uidNext ?? 0
         let savedModSeq = folder.highestModSequence
 
-        // Cache MODSEQ and reconcile unread/total from `messages.is_read` in one
-        // write. Gmail STATUS UNSEEN is unreliable for non-INBOX folders; local
-        // DB is source of truth (Thunderbird SyncCounts parity).
+        // Reconcile unread/total from `messages.is_read`. Gmail STATUS UNSEEN is
+        // unreliable for non-INBOX folders; local DB is source of truth
+        // (Thunderbird SyncCounts parity).
+        //
+        // §8 (RFC 7162 §4): do NOT persist highest_mod_sequence here. STATUS
+        // reports the server's current HIGHESTMODSEQ, but we haven't yet fetched
+        // the delta between savedModSeq and serverModSeq. Advancing the watermark
+        // now would make the next CHANGEDSINCE FETCH request changes *after*
+        // serverModSeq — silently dropping every flag change in the gap. The
+        // watermark is advanced only by the sync paths, after the delta is
+        // applied. serverModSeq is used below solely for the early-return check.
         let localUnread: Int = (try? await pool.write { db -> Int in
             try db.execute(
                 sql: """
                 UPDATE folders SET
-                    highest_mod_sequence = ?,
                     unread_count = (
                         SELECT COUNT(*) FROM messages
                         WHERE folder_id = folders.id AND is_read = 0
@@ -211,7 +242,7 @@ extension SyncService {
                     )
                 WHERE id = ?
                 """,
-                arguments: [serverModSeq, folder.id]
+                arguments: [folder.id]
             )
             return try Int.fetchOne(
                 db,

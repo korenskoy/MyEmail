@@ -77,10 +77,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, open urls: [URL]) {
         for url in urls {
+            // §23: redact query — OAuth callbacks carry `code`/`state`.
             LogService.shared.log(
                 .debug, .auth,
                 "application(_:open:) got URL",
-                detail: url.absoluteString
+                detail: OAuthCallbackBroker.redactedURL(url)
             )
             if isOAuthCallback(url) {
                 OAuthCallbackBroker.shared.deliver(url)

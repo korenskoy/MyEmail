@@ -113,6 +113,11 @@ struct AccountSettingsView: View {
     private func removeSelected() {
         guard let id = selectedAccountID else { return }
         do {
+            // §28: capture folder IDs BEFORE delete so SyncService can purge its
+            // folder-keyed in-memory caches (the rows are gone afterwards).
+            let folderIDs = appState.folders
+                .filter { $0.accountID == id }
+                .map(\.id)
             try env.accountRepository.delete(id: id)
             self.selectedAccountID = nil
 
@@ -127,7 +132,7 @@ struct AccountSettingsView: View {
             }
 
             Task {
-                await env.syncService.removeAccount(id: id)
+                await env.syncService.removeAccount(id: id, folderIDs: folderIDs)
                 // Mirror into live AppState so main window reacts immediately
                 // (empty-state / toolbar visibility depend on accounts.isEmpty).
                 appState.accounts = (try? env.accountRepository.all()) ?? []

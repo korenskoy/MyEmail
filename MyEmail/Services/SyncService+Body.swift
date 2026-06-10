@@ -262,6 +262,7 @@ extension SyncService {
             let filename = Self.sanitizeFilename(attachment.filename)
             let fileURL = base.appendingPathComponent(filename)
             try part.data.write(to: fileURL)
+            Self.setQuarantine(on: fileURL)
 
             var updated = attachment
             updated.localPath = fileURL.path
@@ -294,6 +295,7 @@ extension SyncService {
 
             let fileURL = base.appendingPathComponent(filename)
             try att.data.write(to: fileURL)
+            Self.setQuarantine(on: fileURL)
 
             LogService.log(.debug, .sync, "Saved attachment",
                            detail: "file=\(filename) inline=\(att.isInline) cid=\(att.contentId ?? "nil") size=\(att.data.count) path=\(fileURL.path)")
@@ -347,5 +349,27 @@ extension SyncService {
             .appendingPathComponent("attachments", isDirectory: true)
             .appendingPathComponent(accountID.uuidString, isDirectory: true)
             .appendingPathComponent(messageID.uuidString, isDirectory: true)
+    }
+
+    /// §21: tag a freshly-written attachment with `com.apple.quarantine` so
+    /// Gatekeeper / LaunchServices treat it like a downloaded file — the user
+    /// gets the standard "downloaded from the Internet" warning before opening
+    /// an executable or document macro. Best-effort: failures are logged, not
+    /// fatal (a missing xattr only loses the warning, never blocks the save).
+    nonisolated static func setQuarantine(on url: URL) {
+        // Format: flags;hexTimestamp;agentName;UUID  (LSQuarantine).
+        let flags = "0083"
+        let ts = String(format: "%x", UInt32(Date().timeIntervalSince1970))
+        let value = "\(flags);\(ts);MyEmail;\(UUID().uuidString)"
+        let name = "com.apple.quarantine"
+        url.withUnsafeFileSystemRepresentation { path in
+            guard let path else { return }
+            value.withCString { cStr in
+                if setxattr(path, name, cStr, strlen(cStr), 0, 0) != 0 {
+                    LogService.log(.debug, .sync, "Quarantine xattr failed",
+                                   detail: "\(url.lastPathComponent) errno=\(errno)")
+                }
+            }
+        }
     }
 }

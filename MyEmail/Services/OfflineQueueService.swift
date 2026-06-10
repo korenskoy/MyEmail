@@ -47,29 +47,63 @@ final class OfflineQueueService {
         defer { isDraining = false }
         var processed = 0
 
-        // Accounts in needsReauth — freeze their actions
-        let frozenAccountIDs: Set<UUID> = (try? await pool.read { db in
-            let ids = try Account
+        // Recover orphaned `running` rows from a prior interrupted drain.
+        // Replay is idempotent per-UID, so re-attempting is safe.
+        try? await pool.write { db in
+            try db.execute(sql: "UPDATE pending_actions SET status = 'pending' WHERE status = 'running'")
+        }
+
+        // Accounts in needsReauth — freeze their actions (exclude in SQL).
+        let frozenAccountIDs: [UUID] = (try? await pool.read { db in
+            try Account
                 .filter(Column("auth_state") == AuthState.needsReauth.rawValue)
                 .select(Column("id"))
                 .asRequest(of: UUID.self)
                 .fetchAll(db)
-            return Set(ids)
         }) ?? []
 
+        // Forward-only cursor by created_at. Each action — success or failure —
+        // advances past it, so the loop always terminates and a failed action is
+        // skipped until the next drain (no instant retry burn, no infinite
+        // re-read of a frozen-account row). `seenAtCursor` dedups rows sharing
+        // the same timestamp (bulk-enqueue makes near-identical Date()s); it is
+        // reset whenever the cursor moves to a strictly larger timestamp, so it
+        // stays small even with 10k queued actions.
+        var cursorCreatedAt: Double = -1
+        var seenAtCursor: Set<UUID> = []
+
         while true {
-            // Fetch next pending action (FIFO)
+            // Fetch next pending action at-or-after the cursor, excluding frozen
+            // accounts and already-seen rows directly in SQL.
             let next: PendingAction? = try? await pool.read { db in
-                try PendingAction
-                    .filter(Column("status") == PendingActionStatus.pending.rawValue)
-                    .order(Column("created_at").asc)
-                    .fetchOne(db)
+                var sql = """
+                    SELECT * FROM pending_actions
+                    WHERE status = 'pending' AND created_at >= ?
+                    """
+                var args: [DatabaseValueConvertible] = [cursorCreatedAt]
+                if !frozenAccountIDs.isEmpty {
+                    let ph = frozenAccountIDs.map { _ in "?" }.joined(separator: ", ")
+                    sql += " AND account_id NOT IN (\(ph))"
+                    args.append(contentsOf: frozenAccountIDs.map { $0 as DatabaseValueConvertible })
+                }
+                if !seenAtCursor.isEmpty {
+                    let ph = seenAtCursor.map { _ in "?" }.joined(separator: ", ")
+                    sql += " AND id NOT IN (\(ph))"
+                    args.append(contentsOf: seenAtCursor.map { $0 as DatabaseValueConvertible })
+                }
+                sql += " ORDER BY created_at ASC, id ASC LIMIT 1"
+                return try PendingAction.fetchOne(db, sql: sql, arguments: StatementArguments(args))
             }
 
             guard var action = next else { break }
 
-            // Skip frozen accounts
-            if frozenAccountIDs.contains(action.accountID) { continue }
+            // Advance cursor; reset the dedup set when the timestamp grows.
+            let at = action.createdAt.timeIntervalSince1970
+            if at > cursorCreatedAt {
+                cursorCreatedAt = at
+                seenAtCursor.removeAll(keepingCapacity: true)
+            }
+            seenAtCursor.insert(action.id)
 
             // Mark running
             action.status = .running
@@ -86,7 +120,9 @@ final class OfflineQueueService {
                     _ = try PendingAction.deleteOne(db, key: action.id)
                 }
             } catch {
-                // Failure — increment retry, mark failed if exhausted
+                // Failure — increment retry, mark failed if exhausted, otherwise
+                // back to pending. Cursor already advanced, so this row is not
+                // re-read in the current drain (backoff = next drain).
                 action.attemptCount += 1
                 let newStatus: PendingActionStatus = action.attemptCount >= 5 ? .failed : .pending
                 try? await pool.write { db in

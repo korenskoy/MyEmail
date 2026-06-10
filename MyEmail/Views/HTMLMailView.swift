@@ -45,6 +45,10 @@ struct HTMLMailView: NSViewRepresentable {
         }
         context.coordinator.cidHandler?.cidMap = cidMap
 
+        // §19: flag our own document load so decidePolicyFor allows exactly this
+        // navigation. The web view is reused across messages, so `webView.url` is
+        // non-nil from the 2nd message on and can't be used to detect our load.
+        context.coordinator.isLoadingOwnContent = true
         webView.loadHTMLString(html, baseURL: baseURL)
     }
 
@@ -54,19 +58,43 @@ struct HTMLMailView: NSViewRepresentable {
         var lastHTML: String?
         var cidHandler: CIDSchemeHandler?
 
-        // Block external navigation — links open in system browser
+        /// True between our `loadHTMLString` call and the navigation decision for
+        /// that load. The web view is reused across messages, so `webView.url` is
+        /// non-nil after the first message — this flag (not the URL) marks our own
+        /// document load so decidePolicyFor can allow it while still cancelling
+        /// content-initiated navigation.
+        var isLoadingOwnContent = false
+
+        /// §20: schemes permitted to open in the system browser. Anything else
+        /// (file:, javascript:, custom app schemes) is ignored.
+        private static let allowedLinkSchemes: Set<String> = ["http", "https", "mailto"]
+
         func webView(
             _ webView: WKWebView,
             decidePolicyFor action: WKNavigationAction,
             decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
         ) {
-            if action.navigationType == .linkActivated,
-               let url = action.request.url {
-                NSWorkspace.shared.open(url)
+            // User clicked a link → open in system browser if the scheme is safe.
+            if action.navigationType == .linkActivated {
+                if let url = action.request.url,
+                   let scheme = url.scheme?.lowercased(),
+                   Self.allowedLinkSchemes.contains(scheme) {
+                    NSWorkspace.shared.open(url)
+                }
                 decisionHandler(.cancel)
-            } else {
-                decisionHandler(.allow)
+                return
             }
+
+            // §19: allow ONLY our own document load (flagged just before
+            // loadHTMLString). Everything afterwards — meta-refresh, form posts,
+            // scripted redirects, subframe navigation — is cancelled so the
+            // message body can't navigate.
+            if action.navigationType == .other, isLoadingOwnContent {
+                isLoadingOwnContent = false
+                decisionHandler(.allow)
+                return
+            }
+            decisionHandler(.cancel)
         }
     }
 }
