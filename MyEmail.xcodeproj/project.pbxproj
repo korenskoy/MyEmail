@@ -209,7 +209,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				93133F662F87C8A900BDF625 /* XCRemoteSwiftPackageReference "GRDB" */,
-				93133F6E2F87C8EF00BDF625 /* XCLocalSwiftPackageReference "../SwiftEmailParser" */,
+				93133F6E2F87C8EF00BDF625 /* XCRemoteSwiftPackageReference "SwiftEmailParser" */,
 				93133FA02F90CD3E00BDF625 /* XCLocalSwiftPackageReference "../SwiftMail" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -587,10 +587,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
-		93133F6E2F87C8EF00BDF625 /* XCLocalSwiftPackageReference "../SwiftEmailParser" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../SwiftEmailParser;
-		};
 		93133FA02F90CD3E00BDF625 /* XCLocalSwiftPackageReference "../SwiftMail" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../SwiftMail;
@@ -604,6 +600,14 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 7.0.0;
+			};
+		};
+		93133F6E2F87C8EF00BDF625 /* XCRemoteSwiftPackageReference "SwiftEmailParser" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/korenskoy/SwiftEmailParser.git";
+			requirement = {
+				kind = branch;
+				branch = main;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -620,6 +624,7 @@
 		};
 		93133F6F2F87C8EF00BDF625 /* SwiftEmailParser */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = 93133F6E2F87C8EF00BDF625 /* XCRemoteSwiftPackageReference "SwiftEmailParser" */;
 			productName = SwiftEmailParser;
 		};
 /* End XCSwiftPackageProductDependency section */
