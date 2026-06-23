@@ -9,10 +9,11 @@
 //
 //  Scope: only the currently-selected folder OR any INBOX.
 //
-//  Coordination with foreground clicks: prefetch submits one UID at a time
-//  to the existing command-socket tail (`runCommandSerializedPerAccount`).
-//  A click queues right behind the in-flight prefetch UID. Worst-case click
-//  latency = one prefetch fetch (~200-500 ms for ≤1 MB messages).
+//  Coordination with foreground clicks: prefetch acquires the command-socket
+//  lock (`runCommandSerializedPerAccount`) one batch at a time and releases it
+//  between batches. A foreground click (loadFullMessage) queues right behind
+//  the in-flight batch — not the whole run — so worst-case click latency is one
+//  batch (≤10 messages), not the full ≤30-message prefetch set.
 //
 
 import Foundation
@@ -158,23 +159,70 @@ extension SyncService {
         LogService.log(.info, .sync, "Prefetch start",
                        detail: "folder=\(folderID) count=\(candidates.count)")
 
-        let (fetched, skipped): (Int, Int) = (try? await runCommandSerializedPerAccount(account.id) { [weak self] in
-            guard let self else { return (0, 0) }
-            return await self._prefetchBatchedLocked(
-                candidates: candidates, folder: folder, account: account
-            )
-        }) ?? (0, 0)
+        var fetched = 0
+        var skipped = 0
+        var consecutiveFailedBatches = 0
+        let batchSize = Self.prefetchBatchSize
+
+        batches: for batchStart in stride(from: 0, to: candidates.count, by: batchSize) {
+            if Task.isCancelled {
+                LogService.log(.debug, .sync, "Prefetch cancelled",
+                               detail: "fetched=\(fetched) remaining=\(candidates.count - fetched - skipped)")
+                break
+            }
+            let batchEnd = min(batchStart + batchSize, candidates.count)
+            let batch = Array(candidates[batchStart..<batchEnd])
+
+            // One batch = one command-lock acquisition. Releasing between
+            // batches lets a foreground click (loadFullMessage) jump the FIFO
+            // tail ahead of the next batch instead of waiting the whole run.
+            let outcome: PrefetchBatchOutcome = (try? await runCommandSerializedPerAccount(account.id) { [weak self] in
+                guard let self else { return .abort(skipped: batch.count) }
+                return await self._prefetchOneBatchLocked(batch: batch, folder: folder, account: account)
+            }) ?? .abort(skipped: batch.count)
+
+            switch outcome {
+            case .done(let f, let s):
+                fetched += f
+                skipped += s
+                consecutiveFailedBatches = 0
+            case .transientFailure(let s):
+                skipped += s
+                consecutiveFailedBatches += 1
+                LogService.log(.debug, .sync, "Prefetch batch failed",
+                               detail: "size=\(batch.count)")
+                if consecutiveFailedBatches >= 3 {
+                    LogService.log(.warning, .sync,
+                                   "Prefetch aborted (3 consecutive batch failures)",
+                                   detail: "fetched=\(fetched)")
+                    break batches
+                }
+            case .abort(let s):
+                skipped += s
+                break batches
+            }
+
+            // Yield so a click queued during this batch runs before the next.
+            await Task.yield()
+        }
 
         LogService.log(.info, .sync, "Prefetch done",
                        detail: "folder=\(folderID) fetched=\(fetched) skipped=\(skipped)")
     }
 
-    /// The batched fetch+persist body. Runs under the per-account command lock.
-    /// Returns (fetched, skipped) counts.
-    private func _prefetchBatchedLocked(
-        candidates: [(msg: Message, folder: Folder, account: Account)],
+    private enum PrefetchBatchOutcome {
+        case done(fetched: Int, skipped: Int)
+        case transientFailure(skipped: Int)  // recycle + retry-eligible (counts toward 3-strike abort)
+        case abort(skipped: Int)             // auth / connect failure — stop the whole prefetch
+    }
+
+    /// Fetch + persist one batch under the per-account command lock. Connect /
+    /// select run here (not once per prefetch) so the lock is held only for the
+    /// batch; both are cheap no-ops when the command socket is already warm.
+    private func _prefetchOneBatchLocked(
+        batch: [(msg: Message, folder: Folder, account: Account)],
         folder: Folder, account: Account
-    ) async -> (Int, Int) {
+    ) async -> PrefetchBatchOutcome {
         let imap = getOrCreateCommandIMAPService(for: account)
         await wireTokenProvider(for: account, imap: imap)
 
@@ -187,72 +235,45 @@ extension SyncService {
             }
             LogService.log(.warning, .sync, "Prefetch connect/select failed",
                            detail: "\(error)")
-            return (0, candidates.count)
+            return .abort(skipped: batch.count)
+        }
+
+        let uids = batch.map(\.msg.uid)
+        let rawByUID: [UInt32: Data]
+        do {
+            rawByUID = try await imap.fetchRawMessages(uids: uids)
+        } catch {
+            if SyncService.isAuthError(error) {
+                LogService.log(.warning, .sync, "Prefetch aborted (auth error)", detail: "")
+                return .abort(skipped: batch.count)
+            }
+            await recycleConnectionIfDesynced(error, imap: imap)
+            return .transientFailure(skipped: batch.count)
         }
 
         var fetched = 0
         var skipped = 0
-        var consecutiveFailedBatches = 0
-        let batchSize = Self.prefetchBatchSize
-
-        for batchStart in stride(from: 0, to: candidates.count, by: batchSize) {
-            if Task.isCancelled {
-                LogService.log(.debug, .sync, "Prefetch cancelled",
-                               detail: "fetched=\(fetched) remaining=\(candidates.count - fetched - skipped)")
-                return (fetched, skipped)
-            }
-            await Task.yield()
-
-            let batchEnd = min(batchStart + batchSize, candidates.count)
-            let batch = Array(candidates[batchStart..<batchEnd])
-            let uids = batch.map(\.msg.uid)
-
-            let rawByUID: [UInt32: Data]
-            do {
-                rawByUID = try await imap.fetchRawMessages(uids: uids)
-            } catch {
-                if SyncService.isAuthError(error) {
-                    LogService.log(.warning, .sync, "Prefetch aborted (auth error)",
-                                   detail: "fetched=\(fetched)")
-                    return (fetched, skipped + batch.count)
-                }
-                await recycleConnectionIfDesynced(error, imap: imap)
-                skipped += batch.count
-                consecutiveFailedBatches += 1
-                if consecutiveFailedBatches >= 3 {
-                    LogService.log(.warning, .sync,
-                                   "Prefetch aborted (3 consecutive batch failures)",
-                                   detail: "fetched=\(fetched)")
-                    return (fetched, skipped)
-                }
-                LogService.log(.debug, .sync, "Prefetch batch failed",
-                               detail: "size=\(batch.count) error=\(error)")
+        for candidate in batch {
+            guard let raw = rawByUID[candidate.msg.uid] else {
+                skipped += 1
                 continue
             }
-            consecutiveFailedBatches = 0
-
-            for candidate in batch {
-                guard let raw = rawByUID[candidate.msg.uid] else {
+            do {
+                let persisted = try await persistFullMessageBody(
+                    rawData: raw, msg: candidate.msg, account: account
+                )
+                if persisted.downloadState == .full {
+                    fetched += 1
+                } else {
                     skipped += 1
-                    continue
                 }
-                do {
-                    let persisted = try await persistFullMessageBody(
-                        rawData: raw, msg: candidate.msg, account: account
-                    )
-                    if persisted.downloadState == .full {
-                        fetched += 1
-                    } else {
-                        skipped += 1
-                    }
-                } catch {
-                    skipped += 1
-                    LogService.log(.debug, .sync, "Prefetch persist failed",
-                                   detail: "id=\(candidate.msg.id) error=\(error)")
-                }
+            } catch {
+                skipped += 1
+                LogService.log(.debug, .sync, "Prefetch persist failed",
+                               detail: "id=\(candidate.msg.id) error=\(error)")
             }
         }
-        return (fetched, skipped)
+        return .done(fetched: fetched, skipped: skipped)
     }
 
     /// Single GRDB read pulling msg + folder + account for every candidate.
