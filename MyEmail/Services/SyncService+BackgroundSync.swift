@@ -74,12 +74,14 @@ extension SyncService {
         let imap = getOrCreateIMAPService(for: account)
         guard await imap.isConnected else { return }
 
-        // Load all folders for this account, excluding INBOX and virtual \All Mail
+        // Load all folders for this account, excluding INBOX and virtual \All Mail.
+        // NULL-safe: ordinary folders carry special_use = NULL, and GRDB's `!=`
+        // emits `<>` (not `IS NOT`), so `special_use != 'inbox'` drops every NULL
+        // row — silently excluding all ordinary/nested folders from prefetch.
         let folders: [Folder] = (try? await pool.read { db in
             try Folder
                 .filter(Column("account_id") == account.id)
-                .filter(Column("special_use") != "inbox")
-                .filter(Column("special_use") != "all")
+                .filter(sql: "(special_use IS NULL OR special_use NOT IN ('inbox', 'all'))")
                 .fetchAll(db)
         }) ?? []
 
@@ -176,12 +178,14 @@ extension SyncService {
         //   • folders with a sync currently in flight (`syncingFolders` —
         //     prevents STATUS poll from stacking duplicate work behind a long
         //     user-initiated incrementalSync, e.g. on-select All Mail open)
+        // NULL-safe: ordinary folders carry special_use = NULL. GRDB's `!=` emits
+        // `<>`, and `NULL <> 'inbox'` is NULL (not TRUE), so the old chained `!=`
+        // filters dropped every NULL row — excluding all ordinary/nested folders
+        // (e.g. INBOX/Receipts from server-side rules) from STATUS polling.
         let folders: [Folder] = (try? await pool.read { db in
             try Folder
                 .filter(Column("account_id") == account.id)
-                .filter(Column("special_use") != "inbox")
-                .filter(Column("special_use") != "all")
-                .filter(Column("special_use") != "archive")
+                .filter(sql: "(special_use IS NULL OR special_use NOT IN ('inbox', 'all', 'archive'))")
                 .fetchAll(db)
         })?.filter { !idlePaths.contains($0.path) && !syncingFolders.contains($0.id) } ?? []
 
