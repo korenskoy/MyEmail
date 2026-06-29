@@ -22,6 +22,10 @@ struct MessageDetailView: View {
     // Cached prepared HTML — rebuilt off main thread when renderKey changes.
     // Prevents HTMLHeadInjector.prepare() regex running on every SwiftUI body re-eval.
     @State private var renderedBodyHTML: String = ""
+    // Which mode renderedBodyHTML was built for. Gates the web view so it never
+    // loads the other mode's stale content during the async rebuild window —
+    // a double loadHTMLString on a freshly recreated WKWebView blanks it.
+    @State private var renderedForMode: RenderMode = .none
     @State private var bodyVersion: Int = 0
     @Environment(\.undoManager) private var undoManager
     @AppStorage("enableGravatar") private var enableGravatar = false
@@ -160,7 +164,7 @@ struct MessageDetailView: View {
                         onTrustSender: { trustSender(msg.fromAddress); allowRemoteContent = true }
                     )
                 }
-                if !renderedBodyHTML.isEmpty {
+                if renderedForMode == .html, !renderedBodyHTML.isEmpty {
                     HTMLMailView(
                         html: renderedBodyHTML,
                         baseURL: nil,
@@ -171,7 +175,7 @@ struct MessageDetailView: View {
                 }
             }
         case .plain:
-            if !renderedBodyHTML.isEmpty {
+            if renderedForMode == .plain, !renderedBodyHTML.isEmpty {
                 HTMLMailView(html: renderedBodyHTML, baseURL: nil)
             } else {
                 Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -225,7 +229,7 @@ struct MessageDetailView: View {
         let mode = renderMode
         switch mode {
         case .html:
-            guard let msg = message else { renderedBodyHTML = ""; return }
+            guard let msg = message else { renderedBodyHTML = ""; renderedForMode = .none; return }
             let html = msg.bodyHTML ?? ""
             let refs = inlineRefs
             let allow = allowRemoteContent
@@ -236,8 +240,9 @@ struct MessageDetailView: View {
             }.value
             if Task.isCancelled { return }
             renderedBodyHTML = out
+            renderedForMode = .html
         case .plain:
-            guard let msg = message else { renderedBodyHTML = ""; return }
+            guard let msg = message else { renderedBodyHTML = ""; renderedForMode = .none; return }
             let text = msg.bodyText ?? ""
             let size = plainFontSize
             let mono = plainMonospace
@@ -252,8 +257,10 @@ struct MessageDetailView: View {
             }.value
             if Task.isCancelled { return }
             renderedBodyHTML = out
+            renderedForMode = .plain
         case .encrypted, .attachmentsOnly, .none:
             renderedBodyHTML = ""
+            renderedForMode = mode
         }
     }
 
