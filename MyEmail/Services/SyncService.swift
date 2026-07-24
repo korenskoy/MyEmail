@@ -85,6 +85,12 @@ final class SyncService {
     /// Cancelled on folder switch, disable, disconnect, account re-auth.
     var prefetchTasks: [UUID: Task<Void, Never>] = [:]
 
+    /// Count of foreground body-opens (user clicks) currently in flight.
+    /// Prefetch checks this between messages and yields the command socket
+    /// immediately, so a click never waits behind a full prefetch batch.
+    /// MainActor-isolated → plain Int, no atomics needed.
+    var foregroundOpenPending = 0
+
     /// Currently-selected folder ID, set by `ContentView` on sidebar selection.
     /// Body prefetch is gated to this folder + every INBOX (per plan scope).
     var currentlySelectedFolderID: UUID?

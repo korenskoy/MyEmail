@@ -281,9 +281,6 @@ struct MessageDetailView: View {
                 let loaded = try await env.syncService.loadAttachments(for: msg.id)
                 newInlineRefs = loaded.inlineRefs
                 newAttachments = loaded.regular
-                if !msg.isRead {
-                    await env.syncService.markAsRead([msg.id])
-                }
                 shouldAutoAllow = !blockRemoteContent || isSenderTrusted(msg.fromAddress)
             }
 
@@ -293,6 +290,13 @@ struct MessageDetailView: View {
             attachments = newAttachments
             allowRemoteContent = shouldAutoAllow
             bodyVersion &+= 1
+
+            // Mark-as-read is not needed to display the body — fire it after the
+            // commit so the body shows immediately instead of blocking on the DB
+            // write queue (contended by prefetch).
+            if let msg = loadedMsg, !msg.isRead {
+                Task { await env.syncService.markAsRead([msg.id]) }
+            }
         } catch {
             LogService.log(.error, .sync, "Failed to load message body", detail: "\(error)")
         }

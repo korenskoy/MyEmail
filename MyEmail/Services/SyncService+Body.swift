@@ -26,10 +26,14 @@ extension SyncService {
     /// Runs on the per-account command socket so it never races with
     /// sync/IDLE/backfill on the primary connection.
     func loadFullMessage(id: UUID) async throws -> Message? {
+        // A user click is in flight for the whole open — tell prefetch to yield
+        // the command socket instead of making us wait behind a full batch.
+        foregroundOpenPending += 1
+        defer { foregroundOpenPending -= 1 }
         guard let (msg, folder, account) = try await fetchMessageContext(messageID: id) else { return nil }
-        // Viewing a message is a notability signal (delta=1). Bump once per
-        // load regardless of body cache — open == engagement.
-        await incrementInteractionScore([id], delta: 1)
+        // Viewing a message is a notability signal (delta=1). Fire-and-forget so
+        // this telemetry write never blocks the open on the DB write queue.
+        Task { [weak self] in await self?.incrementInteractionScore([id], delta: 1) }
         if msg.downloadState == .full { return msg }
 
         // Defensive: valid IMAP UIDs start at 1 (RFC 3501). uid=0 would overflow

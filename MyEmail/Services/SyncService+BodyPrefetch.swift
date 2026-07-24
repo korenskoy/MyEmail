@@ -96,11 +96,11 @@ extension SyncService {
 
     // MARK: - Loop
 
-    /// Batch size for pipelined raw-body fetches. Tuned for Gmail (~150 ms RTT):
-    /// 10 messages per round-trip empties most inbox prefetch sets in 1-2 RTTs
-    /// total instead of 10-30. Thunderbird's `nsImapProtocol::FetchMessage`
-    /// uses a comma-list UID set in one command — same end effect.
-    private static let prefetchBatchSize = 10
+    /// Batch size for pipelined raw-body fetches. Kept small (5) so the command
+    /// socket is held only ~0.5-1s per batch and a foreground click preempts
+    /// within one short batch instead of waiting a 10-message one (2-4s). The
+    /// fetch itself is one pipelined round-trip regardless of size.
+    private static let prefetchBatchSize = 5
 
     private func runPrefetchLoop(folderID: UUID) async {
         // Combined scope + auth gate: read folder.special_use AND account.auth_state
@@ -238,6 +238,12 @@ extension SyncService {
             return .abort(skipped: batch.count)
         }
 
+        // A click is already waiting — hand the socket over before the
+        // (non-preemptible) pipelined fetch. Leftovers warm on the next trigger.
+        if foregroundOpenPending > 0 {
+            return .done(fetched: 0, skipped: batch.count)
+        }
+
         let uids = batch.map(\.msg.uid)
         let rawByUID: [UInt32: Data]
         do {
@@ -253,7 +259,16 @@ extension SyncService {
 
         var fetched = 0
         var skipped = 0
-        for candidate in batch {
+        for (i, candidate) in batch.enumerated() {
+            // Yield the socket the moment a click queues up — the remaining
+            // bodies warm on the next prefetch trigger. This bounds click
+            // latency to the in-flight message, not the whole batch.
+            if foregroundOpenPending > 0 {
+                skipped += batch.count - i
+                LogService.log(.debug, .sync, "Prefetch yielded to foreground open",
+                               detail: "persisted=\(fetched) yielded=\(batch.count - i)")
+                break
+            }
             guard let raw = rawByUID[candidate.msg.uid] else {
                 skipped += 1
                 continue
