@@ -336,14 +336,6 @@ extension IMAPService {
         try await srv.append(email: email, to: mailbox, flags: [.seen])
     }
 
-    /// IMAP APPEND raw RFC822 message with explicit flags. Returns new UID if server supports UIDPLUS.
-    @discardableResult
-    func appendRawMessage(_ raw: String, to mailbox: String, flags: [Flag], date: Date?) async throws -> UInt32? {
-        let srv = try await requireServer()
-        let result = try await srv.append(rawMessage: raw, to: mailbox, flags: flags, internalDate: date)
-        return result.firstUID?.value
-    }
-
     /// IMAP APPEND raw RFC822 message as exact bytes — preserves 8-bit content
     /// that doesn't round-trip through String. Returns new UID under UIDPLUS.
     @discardableResult
@@ -375,4 +367,17 @@ extension IMAPService {
         let srv = try await requireServer()
         return try await srv.noop()
     }
+}
+
+// MARK: - Fetch attribute preset
+
+extension FetchMessageInfoOptions {
+    /// Header-only fetch without ENVELOPE: internal date, flags, size and the full
+    /// header section. Headers are parsed locally, encoded-words included, rather
+    /// than trusting the server's ENVELOPE, and `.size` lets body prefetch skip
+    /// oversized messages. Upstream's closest preset, `.slim`, makes the opposite
+    /// trade: ENVELOPE in, header section out.
+    nonisolated static let noEnvelope: FetchMessageInfoOptions = [
+        .internalDate, .flags, .size, .fullHeader
+    ]
 }

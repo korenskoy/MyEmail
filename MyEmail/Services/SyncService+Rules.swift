@@ -380,49 +380,13 @@ extension SyncService {
 
             // 1. FETCH raw RFC822
             let rawData = try await imap.fetchRawMessage(uid: item.uid)
-            guard let raw = String(data: rawData, encoding: .utf8)
-                    ?? String(data: rawData, encoding: .ascii) else {
-                LogService.log(.warning, .rules, "Cannot decode raw message", detail: "UID \(item.uid)")
-                return false
-            }
 
-            // 2. Split headers and body — find separator before any normalization
-            //    to avoid corrupting binary attachments in the body.
-            let separators = ["\r\n\r\n", "\n\n"]
-            guard let sep = separators.first(where: { raw.contains($0) }),
-                  let headerEnd = raw.range(of: sep) else {
+            // 2–4. Replace the Subject header. The body is carried over as the
+            //      fetched bytes, so 8-bit mail survives the round-trip.
+            guard let newRaw = RawMessageHeaders.replacingSubject(in: rawData, with: cleaned) else {
                 LogService.log(.warning, .rules, "No header/body separator", detail: "UID \(item.uid)")
                 return false
             }
-            // Normalize only headers to CRLF; body stays as-is
-            var headerPart = String(raw[..<headerEnd.lowerBound])
-                .replacingOccurrences(of: "\r\n", with: "\n")
-                .replacingOccurrences(of: "\r", with: "\n")
-                .replacingOccurrences(of: "\n", with: "\r\n")
-            let bodyPart = String(raw[headerEnd.lowerBound...])
-
-            // 3. Unfold multiline Subject header (RFC 2822 §2.2.3, case-insensitive).
-            //    `(?im)^` anchors at line start so we don't accidentally match
-            //    `Subject:` occurring inside another header's value (e.g. the
-            //    `h=... Subject: ...` list inside DKIM-Signature).
-            while headerPart.range(of: "(?im)^Subject:.*\r\n[ \t]+",
-                                   options: .regularExpression) != nil {
-                headerPart = headerPart.replacingOccurrences(
-                    of: "(?im)(^Subject:.*?)(\r\n[ \t]+)",
-                    with: "$1 ",
-                    options: .regularExpression
-                )
-            }
-
-            // 4. Replace Subject value with cleaned version (RFC 2047 base64-encoded).
-            //    Line-anchored to skip DKIM's `h=...: Subject: ...` substring.
-            let encodedSubject = "Subject: =?utf-8?b?\(Data(cleaned.utf8).base64EncodedString())?="
-            if let subjectRange = headerPart.range(of: "(?im)^Subject:.*",
-                                                    options: .regularExpression) {
-                headerPart.replaceSubrange(subjectRange, with: encodedSubject)
-            }
-
-            let newRaw = headerPart + bodyPart
 
             // 5. Merge flags: DB (prior actions) + plan (seen/flagged).
             //    APPEND creates the new message with these flags directly —
@@ -444,7 +408,7 @@ extension SyncService {
             if dbFlags.answered { flags.append(.answered) }
 
             // 6. APPEND modified message → get new UID (if UIDPLUS)
-            var newUID = try await imap.appendRawMessage(
+            var newUID = try await imap.appendRawData(
                 newRaw, to: rewrite.target, flags: flags, date: item.date
             )
 
