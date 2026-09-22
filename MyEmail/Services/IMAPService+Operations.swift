@@ -245,23 +245,6 @@ extension IMAPService {
 
     // MARK: - CONDSTORE / RFC 7162 delta fetch
 
-    /// Whether the current IMAP connection advertised CONDSTORE (RFC 7162).
-    var supportsCondStore: Bool {
-        get async {
-            guard let srv = try? await requireServer() else { return false }
-            return await srv.supportsCondStore
-        }
-    }
-
-    /// Whether the current IMAP connection advertised QRESYNC (RFC 7162 §3.2).
-    /// QRESYNC implies CONDSTORE.
-    var supportsQResync: Bool {
-        get async {
-            guard let srv = try? await requireServer() else { return false }
-            return await srv.supportsQResync
-        }
-    }
-
     /// CONDSTORE delta FETCH (RFC 7162 §3.1.2). Returns `MessageInfo` (uid,
     /// flags, internalDate, fullHeader, modSequence — no envelope/bodyStructure)
     /// for every UID whose MODSEQ > `changedSince`. Single round-trip over `1:*`

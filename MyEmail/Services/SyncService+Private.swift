@@ -111,17 +111,21 @@ extension SyncService {
         // ghost set arrives in the same round trip as the SELECT OK, which
         // eliminates the separate chunked SEARCH pass from Phase A.
         let sel: Mailbox.Selection
+        // Ghosts only ever arrive from a QRESYNC SELECT; every other path
+        // leaves this empty and falls back to the reconcile passes below.
+        var qresyncGhostUIDs: Set<UInt32> = []
         if let cached = cachedSelection {
             sel = cached
         } else if await imap.supportsQResync,
                   savedUidValidity > 0, savedHighestModSeq > 0 {
             do {
-                sel = try await imap.selectFolderWithQResync(
+                let resync = try await imap.selectFolderWithQResync(
                     folderPath,
                     uidValidity: savedUidValidity,
-                    modSeq: savedHighestModSeq,
-                    knownUids: nil
+                    modSeq: savedHighestModSeq
                 )
+                sel = resync.selection
+                qresyncGhostUIDs = resync.vanishedUIDs
             } catch {
                 LogService.log(.warning, .sync,
                     "QRESYNC SELECT failed, falling back to plain SELECT",
@@ -150,7 +154,7 @@ extension SyncService {
         // Step 2b: MODSEQ regression check (RFC 7162 §6). Server-side repair /
         // restore drops the HIGHESTMODSEQ below our last known watermark;
         // treat this as a UIDVALIDITY-style reset to avoid missing changes.
-        if let serverModSeq = sel.highestModSequence,
+        if let serverModSeq = sel.modSeqWatermark,
            let savedModSeq = saved.highestModSequence,
            savedModSeq > 0,
            UInt64(savedModSeq) > serverModSeq {
@@ -198,7 +202,7 @@ extension SyncService {
                 highestKnownUid: newHighest, moreMessages: hasMore
             )
             // Persist HIGHESTMODSEQ for subsequent CONDSTORE deltas.
-            if let newModSeq = sel.highestModSequence {
+            if let newModSeq = sel.modSeqWatermark {
                 try? await pool.write { db in
                     try db.execute(
                         sql: "UPDATE folders SET highest_mod_sequence = ? WHERE id = ?",
@@ -211,7 +215,7 @@ extension SyncService {
         }
 
         // QRESYNC primary path (RFC 7162 §3.2) — VANISHED (EARLIER) arrived
-        // inline with the SELECT above. `sel.vanishedUIDs` carries the ghost
+        // inline with the SELECT above. `qresyncGhostUIDs` carries that ghost
         // set with no extra round trip. We still need a CHANGEDSINCE FETCH
         // for *new + mutated* messages, since SELECT (QRESYNC ...) only
         // backfills FETCH lines when the server chooses to — coverage of
@@ -222,7 +226,8 @@ extension SyncService {
            sel.uidValidity.value == savedUidValidity {
             try await qresyncIncrementalSync(
                 account: account, folderID: folderID, folderPath: folderPath,
-                imap: imap, saved: saved, sel: sel,
+                imap: imap, saved: saved,
+                resync: (selection: sel, vanishedUIDs: qresyncGhostUIDs),
                 localUIDs: localUIDs, pendingSourceUIDs: pendingSourceUIDs,
                 pendingTargetUIDs: pendingTargetUIDs,
                 highestKnownUid: highestKnownUid
@@ -262,7 +267,7 @@ extension SyncService {
     /// server advertises QRESYNC, saved UIDVALIDITY matches, saved MODSEQ > 0.
     ///
     /// Flow:
-    /// 1. `sel.vanishedUIDs` already carries the ghost set from the SELECT
+    /// 1. `vanishedUIDs` already carries the ghost set from the SELECT
     ///    (QRESYNC ...) untagged `* VANISHED (EARLIER)` response — no separate
     ///    SEARCH needed. Subtract pending source UIDs so in-flight move/delete
     ///    actions don't double-ghost.
@@ -273,12 +278,14 @@ extension SyncService {
     /// 5. Advance HIGHESTMODSEQ watermark.
     private func qresyncIncrementalSync(
         account: Account, folderID: UUID, folderPath: String,
-        imap: IMAPService, saved: Folder, sel: Mailbox.Selection,
+        imap: IMAPService, saved: Folder, resync: QResyncSelection,
         localUIDs: Set<UInt32>, pendingSourceUIDs: Set<UInt32>,
         pendingTargetUIDs: Set<UInt32>,
         highestKnownUid: UInt32
     ) async throws {
         LogService.log(.info, .sync, "sync path: qresync", detail: folderPath)
+        let sel = resync.selection
+        let vanishedUIDs = resync.vanishedUIDs
 
         let accountID = account.id
         let serverUidValidity = sel.uidValidity.value
@@ -289,7 +296,7 @@ extension SyncService {
         // 1) Ghosts — VANISHED (EARLIER) already delivered. Subtract both
         //    pending directions (§9.2): source-UIDs leaving and target-UIDs
         //    arriving via an in-flight optimistic move.
-        let ghostUIDs = sel.vanishedUIDs
+        let ghostUIDs = vanishedUIDs
             .intersection(localUIDs)
             .subtracting(pendingSourceUIDs)
             .subtracting(pendingTargetUIDs)
@@ -318,7 +325,7 @@ extension SyncService {
         var existingFlags: [(uid: UInt32, flags: [Flag])] = []
         for info in changedInfos {
             guard let uid = info.uid?.value else { continue }
-            if sel.vanishedUIDs.contains(uid) { continue }
+            if vanishedUIDs.contains(uid) { continue }
             if localUIDs.contains(uid) {
                 existingFlags.append((uid: uid, flags: info.flags))
             } else {
@@ -386,7 +393,7 @@ extension SyncService {
             imap: imap, saved: saved,
             localUIDs: knownAfterDelta, minLocalUID: knownAfterDelta.min(),
             serverCount: serverCount,
-            vanishedUIDs: sel.vanishedUIDs
+            vanishedUIDs: vanishedUIDs
         )
 
         if !newInfos.isEmpty || !backfilledUIDs.isEmpty {
@@ -395,7 +402,7 @@ extension SyncService {
 
         // 5) Advance HIGHESTMODSEQ watermark — never regress.
         let fetchedMax = changedInfos.compactMap(\.modSequence).max() ?? 0
-        let selectMax = sel.highestModSequence ?? 0
+        let selectMax = sel.modSeqWatermark ?? 0
         let newMax = max(fetchedMax, selectMax, savedModSeq)
         if fetchedMax > 0, fetchedMax < savedModSeq {
             LogService.log(.warning, .sync,
@@ -638,7 +645,7 @@ extension SyncService {
         // MODSEQs below the requested CHANGEDSINCE — never regress. Prefer
         // the SELECT-reported HIGHESTMODSEQ when it's larger.
         let fetchedMax = changedInfos.compactMap(\.modSequence).max() ?? 0
-        let selectMax = sel.highestModSequence ?? 0
+        let selectMax = sel.modSeqWatermark ?? 0
         let newMax = max(fetchedMax, selectMax, savedModSeq)
         if fetchedMax > 0, fetchedMax < savedModSeq {
             LogService.log(.warning, .sync,
@@ -727,7 +734,7 @@ extension SyncService {
         }
 
         // Advance HIGHESTMODSEQ watermark from SELECT if advertised.
-        if let newModSeq = sel.highestModSequence {
+        if let newModSeq = sel.modSeqWatermark {
             try? await pool.write { db in
                 try db.execute(
                     sql: "UPDATE folders SET highest_mod_sequence = ? WHERE id = ?",

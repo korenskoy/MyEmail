@@ -11,7 +11,13 @@
 
 import Foundation
 import GRDB
+import struct NIOIMAPCore.ModificationSequenceValue
 import SwiftMail
+
+/// A QRESYNC SELECT: the selection plus the ghost UIDs the server reported
+/// inline with it. Travels as one value so the sync entry points don't grow
+/// a parallel parameter for the ghost set.
+typealias QResyncSelection = (selection: Mailbox.Selection, vanishedUIDs: Set<UInt32>)
 
 actor IMAPService {
     private let account: Account
@@ -24,6 +30,12 @@ actor IMAPService {
     // MARK: - SELECT state
     private(set) var lastSelection: Mailbox.Selection?
     private(set) var selectedFolderPath: String?
+
+    // MARK: - Delta-sync capabilities (RFC 7162)
+    /// Confirmed by ENABLE on the live connection, not merely advertised.
+    /// Reset on disconnect: ENABLE is per-connection state.
+    private(set) var supportsQResync: Bool = false
+    private(set) var supportsCondStore: Bool = false
 
     // MARK: - Health state (Thunderbird parity §9.X)
     /// Last successful round-trip (CONNECT, SELECT, NOOP). Used by the
@@ -164,6 +176,7 @@ actor IMAPService {
         self.server = srv
         self.lastActivityAt = Date()
         self.needsHealthProbe = false
+        await enableDeltaSyncCapabilities(on: srv)
         LogService.log(.info, .imap, "Connected \(account.email)")
     }
 
@@ -176,6 +189,8 @@ actor IMAPService {
         self.selectedFolderPath = nil
         self.lastActivityAt = nil
         self.needsHealthProbe = false
+        self.supportsQResync = false
+        self.supportsCondStore = false
         LogService.log(.info, .imap, "Disconnected \(account.email)")
     }
 
@@ -294,26 +309,53 @@ actor IMAPService {
         return sel
     }
 
-    /// Resume SELECT with QRESYNC parameters (RFC 7162 §3.2.5). The returned
-    /// `Mailbox.Selection` carries `highestModSequence` (new server watermark)
-    /// and `vanishedUIDs` (UIDs expunged since the client's `modSeq`), so the
-    /// ghost set arrives inline instead of needing a separate SEARCH.
-    @discardableResult
+    /// Resume SELECT with QRESYNC parameters (RFC 7162 §3.2.5). The server
+    /// reports `* VANISHED (EARLIER) <uid-set>` inline, so the ghost set
+    /// arrives in the same round trip as the SELECT OK — no separate SEARCH.
+    ///
+    /// Returns the selection plus the ghost UIDs. `vanishedEarlier` are the
+    /// historical deletions we have to reconcile away locally; plain
+    /// `vanished` are live expunges during this command. Both are gone
+    /// server-side, so the sync engine treats them as one set.
     func selectFolderWithQResync(
         _ path: String,
         uidValidity: UInt32,
-        modSeq: UInt64,
-        knownUids: Set<UInt32>? = nil
-    ) async throws -> Mailbox.Selection {
+        modSeq: UInt64
+    ) async throws -> QResyncSelection {
         try await ensureHealthyConnection()
         let srv = try serverOrThrow()
-        let sel = try await srv.selectMailboxWithQResync(
-            path, uidValidity: uidValidity, modSeq: modSeq, knownUIDs: knownUids
+        let resync = try await srv.selectMailbox(
+            path,
+            resyncingFrom: UIDValidity(uidValidity),
+            modificationSequence: ModificationSequenceValue(modSeq)
         )
-        self.lastSelection = sel
+        self.lastSelection = resync.selection
         self.selectedFolderPath = path
         self.lastActivityAt = Date()
-        return sel
+        let ghosts = resync.vanishedEarlier.toArray() + resync.vanished.toArray()
+        return (resync.selection, Set(ghosts.map(\.value)))
+    }
+
+    /// RFC 7162 §3.2.1: QRESYNC must be turned on with ENABLE before any
+    /// SELECT can carry resync parameters; CONDSTORE is implied by it.
+    /// Servers lacking ENABLE throw here — delta sync then simply stays off
+    /// and the sync engine falls back to its legacy SEARCH path.
+    private func enableDeltaSyncCapabilities(on srv: IMAPServer) async {
+        supportsQResync = false
+        supportsCondStore = false
+        do {
+            let confirmed = try await srv.enable([.qresync, .condStore])
+            let names = Set(confirmed.map { String($0).uppercased() })
+            supportsQResync = names.contains("QRESYNC")
+            // QRESYNC implies CONDSTORE (RFC 7162 §3.2.3) even when the
+            // server only echoes the former.
+            supportsCondStore = supportsQResync || names.contains("CONDSTORE")
+            LogService.log(.debug, .imap, "ENABLE confirmed",
+                           detail: names.sorted().joined(separator: ","))
+        } catch {
+            LogService.log(.debug, .imap, "ENABLE unavailable — delta sync off",
+                           detail: "\(error)")
+        }
     }
 
     /// Skip re-SELECT if folder already active on this connection.
