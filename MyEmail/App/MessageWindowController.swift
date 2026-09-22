@@ -35,9 +35,10 @@ final class MessageWindowController: NSWindowController, NSWindowDelegate {
         )
         window.title = String(localized: "Message")
         window.minSize = NSSize(width: 500, height: 400)
-        window.setFrameAutosaveName(
-            "MyEmailMessageWindow-\(messageID.uuidString.prefix(8))"
-        )
+        // One frame shared by every message window: reading a different
+        // message is the same task in the same place, so it keeps whatever
+        // size and position was last left behind.
+        window.setFrameAutosaveName("MyEmailMessageWindow")
 
         let rootView = MessageDetailView(messageID: messageID)
             .environment(appState)
@@ -47,6 +48,9 @@ final class MessageWindowController: NSWindowController, NSWindowDelegate {
         window.contentView = NSHostingView(rootView: rootView)
 
         super.init(window: window)
+        // Cascading would offset each window from the restored frame and then
+        // save the offset, so the position would creep down-right over time.
+        shouldCascadeWindows = false
         window.delegate = self
     }
 
