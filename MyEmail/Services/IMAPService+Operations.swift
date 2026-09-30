@@ -281,7 +281,7 @@ extension IMAPService {
         try await srv.createMailbox(path)
     }
 
-    // MARK: - Raw IMAP commands (EXAMINE — not in SwiftMail)
+    // MARK: - Mailbox management
 
     /// IMAP DELETE mailbox — RFC 3501 §6.3.4
     func deleteMailbox(_ path: String) async throws {
@@ -293,13 +293,6 @@ extension IMAPService {
     func renameMailbox(from oldPath: String, to newPath: String) async throws {
         let srv = try await requireServer()
         try await srv.renameMailbox(from: oldPath, to: newPath)
-    }
-
-    /// IMAP EXAMINE (read-only SELECT) — RFC 3501 §6.3.2
-    func examineFolder(_ path: String) async throws -> ExamineResult {
-        let raw = try await createAuthenticatedRawClient()
-        defer { Task { await raw.logout() } }
-        return try await raw.examine(path)
     }
 
     // MARK: - STATUS (lightweight poll, no SELECT)

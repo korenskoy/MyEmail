@@ -6,8 +6,7 @@
 //  connection (connect → auth → sendEmail → QUIT + close). SMTP servers drop
 //  idle sockets per RFC 5321 §4.5.3.2 (typical 5–10 min); a cached SMTPServer
 //  surfaces the dead channel as NIOCore.ChannelError.outputClosed on the next
-//  write. One-shot also matches the IMAPRawClient guideline (CLAUDE.md #19)
-//  and prevents MultiThreadedEventLoopGroup leaks across sends.
+//  write. One-shot also prevents MultiThreadedEventLoopGroup leaks across sends.
 //
 
 import Foundation

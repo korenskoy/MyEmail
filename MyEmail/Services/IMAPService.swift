@@ -529,34 +529,6 @@ actor IMAPService {
         return try await srv.listMailboxes()
     }
 
-    // MARK: - Raw client factory (for commands SwiftMail doesn't expose)
-
-    /// Create an authenticated raw IMAP client for DELETE, RENAME, EXAMINE.
-    /// Opens a separate short-lived connection.
-    func createAuthenticatedRawClient() async throws -> IMAPRawClient {
-        let raw = IMAPRawClient(
-            host: account.imapHost,
-            port: UInt16(account.imapPort),
-            security: account.imapSecurity
-        )
-        try await raw.connect()
-
-        switch account.authType {
-        case .oauth2:
-            if let provider = accessTokenProvider {
-                let token = try await provider()
-                try await raw.authenticateXOAUTH2(email: account.email, accessToken: token)
-            } else {
-                let token = try keychain.oauthAccessToken(for: account.id)
-                try await raw.authenticateXOAUTH2(email: account.email, accessToken: token)
-            }
-        case .plain:
-            let password = try keychain.password(for: account.id)
-            try await raw.login(user: account.email, password: password)
-        }
-        return raw
-    }
-
     // MARK: - Private
 
     /// Probe-gated server accessor. All entry-point IMAP ops MUST use this
