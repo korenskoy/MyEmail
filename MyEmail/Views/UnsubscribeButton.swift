@@ -51,7 +51,13 @@ struct UnsubscribeButton: View {
         case .oneClick:
             String(localized: "An unsubscribe request will be sent to \(method.target).")
         case .mail:
-            String(localized: "An unsubscribe email will be sent to \(method.target) from your account.")
+            // Subject and body come from the message — show exactly what will be sent.
+            [
+                String(localized: "An unsubscribe email will be sent to \(method.target) from your account."),
+                "",
+                String(localized: "Subject: \(String(method.mail?.subject.prefix(200) ?? ""))"),
+                String(localized: "Text: \(String(method.mail?.body.prefix(200) ?? ""))")
+            ].joined(separator: "\n")
         case .web:
             String(localized: "The unsubscribe page on \(method.target) will open in your browser.")
         }

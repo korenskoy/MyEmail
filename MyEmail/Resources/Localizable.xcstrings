@@ -3373,6 +3373,16 @@
         }
       }
     },
+    "Text: %@": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Текст: %@"
+          }
+        }
+      }
+    },
     "The unsubscribe page on %@ will open in your browser.": {
       "localizations": {
         "ru": {
