@@ -53,6 +53,11 @@ struct Message: Identifiable, Codable, Hashable, Sendable,
     /// via the MUAResolver XPC service.
     var userAgent: String?
 
+    /// Raw RFC 2369 `List-Unsubscribe` value; `listUnsubscribeOneClick` = RFC 8058
+    /// `List-Unsubscribe-Post` present. Parsed in persistHeaders.
+    var listUnsubscribe: String?
+    var listUnsubscribeOneClick: Bool
+
     var date: Date
     var preview: String
 
@@ -103,6 +108,8 @@ struct Message: Identifiable, Codable, Hashable, Sendable,
         isEncrypted: Bool = false, hasAttachments: Bool = false,
         listID: String? = nil,
         userAgent: String? = nil,
+        listUnsubscribe: String? = nil,
+        listUnsubscribeOneClick: Bool = false,
         folderID: UUID, accountID: UUID
     ) {
         self.id = id; self.uid = uid; self.messageID = messageID
@@ -125,6 +132,8 @@ struct Message: Identifiable, Codable, Hashable, Sendable,
         self.bccSearch = Self.searchJoin(bccAddresses)
         self.listID = listID
         self.userAgent = userAgent
+        self.listUnsubscribe = listUnsubscribe
+        self.listUnsubscribeOneClick = listUnsubscribeOneClick
     }
 
     /// Build space-joined, lowercased, comma-stripped representation of an
@@ -155,6 +164,8 @@ struct Message: Identifiable, Codable, Hashable, Sendable,
         case bccSearch = "bcc_search"
         case listID = "list_id"
         case userAgent = "user_agent"
+        case listUnsubscribe = "list_unsubscribe"
+        case listUnsubscribeOneClick = "list_unsubscribe_one_click"
         case date
         case preview
         case isRead = "is_read"
@@ -199,6 +210,8 @@ struct Message: Identifiable, Codable, Hashable, Sendable,
         self.bccSearch = (try? c.decode(String.self, forKey: .bccSearch)) ?? Self.searchJoin(self.bccAddresses)
         self.listID = try c.decodeIfPresent(String.self, forKey: .listID)
         self.userAgent = try c.decodeIfPresent(String.self, forKey: .userAgent)
+        self.listUnsubscribe = try c.decodeIfPresent(String.self, forKey: .listUnsubscribe)
+        self.listUnsubscribeOneClick = try c.decodeIfPresent(Bool.self, forKey: .listUnsubscribeOneClick) ?? false
 
         // `date` stored as REAL (Unix timestamp).
         let ts = try c.decode(Double.self, forKey: .date)
@@ -246,6 +259,8 @@ struct Message: Identifiable, Codable, Hashable, Sendable,
         try c.encode(bccSearch, forKey: .bccSearch)
         try c.encodeIfPresent(listID, forKey: .listID)
         try c.encodeIfPresent(userAgent, forKey: .userAgent)
+        try c.encodeIfPresent(listUnsubscribe, forKey: .listUnsubscribe)
+        try c.encode(listUnsubscribeOneClick, forKey: .listUnsubscribeOneClick)
 
         try c.encode(date.timeIntervalSince1970, forKey: .date)
         try c.encode(preview, forKey: .preview)

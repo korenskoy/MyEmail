@@ -612,6 +612,7 @@ final class SyncService {
         case serialQueueFailure
         /// §22: a recipient address contained CR/LF — rejected before send.
         case invalidRecipient
+        case accountNotFound
     }
 
     func disconnectAll() async {

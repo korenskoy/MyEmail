@@ -32,6 +32,10 @@ extension DatabaseService {
                 "ALTER TABLE mail_rules ADD COLUMN folder_paths TEXT NOT NULL DEFAULT '[]'")
             try? db.execute(sql:
                 "ALTER TABLE messages ADD COLUMN user_agent TEXT")
+            try? db.execute(sql:
+                "ALTER TABLE messages ADD COLUMN list_unsubscribe TEXT")
+            try? db.execute(sql:
+                "ALTER TABLE messages ADD COLUMN list_unsubscribe_one_click INTEGER NOT NULL DEFAULT 0")
 
             // Backfill: strip stray trailing CR/LF/tabs/spaces from `subject`
             // left by some MIME decoders. A trailing newline reserves a second
@@ -166,6 +170,9 @@ extension DatabaseService {
             body_html          TEXT,
             download_state     TEXT NOT NULL DEFAULT 'envelope',
             user_agent         TEXT,
+            -- RFC 2369 List-Unsubscribe; one_click = RFC 8058 List-Unsubscribe-Post present.
+            list_unsubscribe   TEXT,
+            list_unsubscribe_one_click INTEGER NOT NULL DEFAULT 0,
             folder_id          TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
             account_id         TEXT NOT NULL,
             UNIQUE(folder_id, uid)

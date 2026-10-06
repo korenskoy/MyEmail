@@ -1384,6 +1384,10 @@ extension SyncService {
                 // List-ID header for `list:` search operator (best-effort —
                 // depends on server returning it in BODY[HEADER.FIELDS]).
                 let listID = Self.extractListID(info.additionalFields)
+                // SwiftMail lowercases header keys and unfolds continuation lines.
+                // "" = headers seen, none present; NULL = unknown (backfilled on open).
+                let listUnsubscribe = info.additionalFields.map { $0["list-unsubscribe"] ?? "" }
+                let listUnsubscribeOneClick = info.additionalFields?["list-unsubscribe-post"] != nil
 
                 var msg = Message(
                     id: UUID(), uid: uid.value,
@@ -1400,6 +1404,8 @@ extension SyncService {
                     bodyText: nil, bodyHTML: nil, downloadState: .envelope,
                     hasAttachments: detectedAttachments,
                     listID: listID,
+                    listUnsubscribe: listUnsubscribe,
+                    listUnsubscribeOneClick: listUnsubscribeOneClick,
                     folderID: folderID, accountID: accountID
                 )
                 // §11: upsert on UNIQUE(folder_id, uid). A row may have appeared

@@ -315,6 +315,26 @@
       }
     },
     "Always load from %@": {},
+    "An unsubscribe email will be sent to %@ from your account.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "С вашего аккаунта на %@ будет отправлено письмо с отпиской."
+          }
+        }
+      }
+    },
+    "An unsubscribe request will be sent to %@.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Запрос на отписку будет отправлен на %@."
+          }
+        }
+      }
+    },
     "Any condition (OR)": {},
     "Appearance": {
       "localizations": {
@@ -3353,6 +3373,16 @@
         }
       }
     },
+    "The unsubscribe page on %@ will open in your browser.": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Страница отписки на %@ откроется в браузере."
+          }
+        }
+      }
+    },
     "Theme": {
       "localizations": {
         "ru": {
@@ -3591,6 +3621,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Без ограничений"
+          }
+        }
+      }
+    },
+    "Unsubscribe": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отписаться"
+          }
+        }
+      }
+    },
+    "Unsubscribe failed": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось отписаться"
+          }
+        }
+      }
+    },
+    "Unsubscribe from %@?": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отписаться от %@?"
+          }
+        }
+      }
+    },
+    "Unsubscribed": {
+      "localizations": {
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы отписаны"
           }
         }
       }

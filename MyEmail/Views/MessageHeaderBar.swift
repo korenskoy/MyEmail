@@ -59,7 +59,7 @@ struct MessageHeaderBar: View {
 
                 Spacer()
 
-                actionButtons
+                actionButtons(sender: fromDisplayName)
             }
 
             // Recipients
@@ -116,12 +116,18 @@ struct MessageHeaderBar: View {
         }
     }
 
-    private var actionButtons: some View {
-        // Spark-style ordering: triage actions (Archive / Delete / Spam) on
-        // the left for fast left-to-right keyboard-free scanning during
+    private func actionButtons(sender: String) -> some View {
+        // Spark-style ordering: triage actions (Unsubscribe / Archive / Delete /
+        // Spam) on the left for fast left-to-right keyboard-free scanning during
         // inbox triage; compose actions (Reply / Reply All / Forward) and
         // the rarely-used View Source on the right.
         HStack(spacing: 6) {
+            if let method = UnsubscribeMethod(
+                header: message.listUnsubscribe, oneClick: message.listUnsubscribeOneClick
+            ) {
+                UnsubscribeButton(method: method, sender: sender, accountID: message.accountID)
+                    .id(message.id)
+            }
             if let onArchive {
                 Button(action: onArchive) {
                     Image(systemName: "archivebox")

@@ -480,6 +480,15 @@ actor IMAPService {
         return try await srv.fetchMessageInfosBulk(using: set, options: .noEnvelope)
     }
 
+    /// Only the RFC 2369/8058 unsubscribe headers for one UID. Nil if the UID is gone.
+    func fetchUnsubscribeHeaders(uid: UInt32) async throws -> MessageInfo? {
+        let srv = try await requireServer()
+        return try await srv.fetchMessageInfo(
+            for: UID(uid), options: [],
+            headerFields: ["List-Unsubscribe", "List-Unsubscribe-Post"]
+        )
+    }
+
     /// Fetch flags for a single UID via FETCH (FLAGS). Used by rawHeaderFallback.
     func fetchSingleMessageInfo(uid: UInt32) async throws -> MessageInfo? {
         let srv = try await requireServer()

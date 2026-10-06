@@ -297,6 +297,13 @@ struct MessageDetailView: View {
             if let msg = loadedMsg, !msg.isRead {
                 Task { await env.syncService.markAsRead([msg.id]) }
             }
+
+            if let msg = loadedMsg, msg.listUnsubscribe == nil,
+               let filled = await env.syncService.backfillListUnsubscribe(messageID: msg.id),
+               message?.id == msg.id {
+                message?.listUnsubscribe = filled.header
+                message?.listUnsubscribeOneClick = filled.oneClick
+            }
         } catch {
             LogService.log(.error, .sync, "Failed to load message body", detail: "\(error)")
         }
