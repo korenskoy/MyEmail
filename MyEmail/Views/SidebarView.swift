@@ -322,6 +322,11 @@ struct FolderRowView: View {
                 )
             }
         }
+        // AppKit emphasises a sidebar row on its own — a row that has carried
+        // a context menu or a drop highlight can keep a heavier label long
+        // after the interaction, which reads as "this folder is special".
+        // Nothing here ever wants a heavier weight, so pin it.
+        .fontWeight(.regular)
     }
 
     private var iconName: String {
